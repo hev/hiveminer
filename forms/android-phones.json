@@ -1,0 +1,61 @@
+{
+  "title": "Android Phones",
+  "description": "Extract and compare Android phone recommendations from Reddit discussions",
+  "search_hints": ["best android", "phone recommendation", "which phone", "upgrade"],
+  "fields": [
+    {
+      "id": "phone_model",
+      "type": "string",
+      "question": "What specific phone model is being recommended?",
+      "required": true
+    },
+    {
+      "id": "price",
+      "type": "string",
+      "question": "What price or price range is mentioned?",
+      "search_hints": ["$", "price", "cost", "deal", "sale", "paid"]
+    },
+    {
+      "id": "battery_life",
+      "type": "string",
+      "question": "What do people say about battery life?",
+      "search_hints": ["battery", "charge", "SOT", "screen on time", "lasts", "dies"]
+    },
+    {
+      "id": "camera_quality",
+      "type": "string",
+      "question": "What do people say about camera quality?",
+      "search_hints": ["camera", "photo", "video", "portrait", "night mode", "zoom"]
+    },
+    {
+      "id": "performance",
+      "type": "string",
+      "question": "What do people say about speed and performance?",
+      "search_hints": ["fast", "slow", "lag", "smooth", "snapdragon", "chip", "RAM"]
+    },
+    {
+      "id": "update_support",
+      "type": "string",
+      "question": "What do people say about software updates and support longevity?",
+      "search_hints": ["update", "years", "support", "Android", "OS", "patch", "bloat"]
+    },
+    {
+      "id": "pros",
+      "type": "array",
+      "question": "What are the standout positives people mention?",
+      "search_hints": ["love", "best", "great", "amazing", "favorite"]
+    },
+    {
+      "id": "cons",
+      "type": "array",
+      "question": "What are the common complaints?",
+      "search_hints": ["hate", "issue", "problem", "wish", "annoying", "overheats"]
+    },
+    {
+      "id": "vs_comparison",
+      "type": "string",
+      "question": "What other phones is it directly compared to, and how?",
+      "search_hints": ["vs", "compared to", "over the", "instead of", "switched from"]
+    }
+  ]
+}

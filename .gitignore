@@ -1,0 +1,5 @@
+output/
+threadminer
+.DS_Store
+.claude/traces/
+node_modules/

@@ -1,0 +1,55 @@
+{
+  "title": "Family Vacation Destinations",
+  "description": "Extract and compare family vacation destinations from Reddit discussions",
+  "search_hints": ["family vacation", "trip with kids", "family friendly", "best destination"],
+  "fields": [
+    {
+      "id": "destination",
+      "type": "string",
+      "question": "What destination or resort is being recommended?",
+      "required": true
+    },
+    {
+      "id": "best_age_range",
+      "type": "string",
+      "question": "What age range of kids is this best suited for?",
+      "search_hints": ["toddler", "teenager", "age", "year old", "kids"]
+    },
+    {
+      "id": "cost_per_day",
+      "type": "string",
+      "question": "What is the approximate daily cost for a family mentioned?",
+      "search_hints": ["$", "per day", "per night", "cost", "budget", "expensive", "cheap"]
+    },
+    {
+      "id": "best_season",
+      "type": "string",
+      "question": "What time of year do people recommend visiting?",
+      "search_hints": ["summer", "winter", "spring", "fall", "season", "month", "avoid"]
+    },
+    {
+      "id": "kid_activities",
+      "type": "array",
+      "question": "What specific kid-friendly activities are mentioned?",
+      "search_hints": ["pool", "beach", "park", "ride", "museum", "zoo", "waterpark"]
+    },
+    {
+      "id": "logistics_tips",
+      "type": "array",
+      "question": "What practical travel tips or logistics advice do people share?",
+      "search_hints": ["flight", "drive", "hotel", "airbnb", "rent", "book", "tip", "pack"]
+    },
+    {
+      "id": "drawbacks",
+      "type": "array",
+      "question": "What downsides or warnings do people mention?",
+      "search_hints": ["crowded", "expensive", "avoid", "overrated", "disappointing", "hot"]
+    },
+    {
+      "id": "mention_count",
+      "type": "number",
+      "question": "How many separate commenters recommended this destination?",
+      "internal": true
+    }
+  ]
+}

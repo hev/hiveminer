@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(rdt ls:*)",
+      "Bash(python3:*)",
+      "Bash(./threadminer:*)",
+      "Bash(threadminer ls:*)",
+      "Skill(reddit)",
+      "WebFetch(domain:www.reddit.com)",
+      "WebSearch"
+    ]
+  }
+}
