@@ -29,17 +29,18 @@ func (m *MockExtractor) ExtractFields(ctx context.Context, thread *types.Thread,
 		return result, nil
 	}
 
-	// Return empty result with all fields
-	result := &types.ExtractionResult{
-		Fields: make([]types.FieldValue, len(form.Fields)),
-	}
-
+	// Return empty result with one entry containing all fields
+	fields := make([]types.FieldValue, len(form.Fields))
 	for i, field := range form.Fields {
-		result.Fields[i] = types.FieldValue{
+		fields[i] = types.FieldValue{
 			ID:         field.ID,
 			Value:      nil,
 			Confidence: 0,
 		}
+	}
+
+	result := &types.ExtractionResult{
+		Entries: []types.Entry{{Fields: fields}},
 	}
 
 	return result, nil

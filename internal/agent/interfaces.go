@@ -19,6 +19,26 @@ type Discoverer interface {
 	DiscoverSubreddits(ctx context.Context, form *types.Form, query string) ([]string, error)
 }
 
+// ThreadDiscoverer defines the interface for agentically discovering relevant threads
+type ThreadDiscoverer interface {
+	// DiscoverThreads finds relevant threads across subreddits for a form and query
+	DiscoverThreads(ctx context.Context, form *types.Form, query string, subreddits []string, limit int, sessionDir string) ([]types.Post, error)
+}
+
+// ThreadEvaluator defines the interface for evaluating thread relevance
+type ThreadEvaluator interface {
+	// EvaluateThread evaluates whether a thread is relevant to the form
+	EvaluateThread(ctx context.Context, form *types.Form, thread types.ThreadState, sessionDir string) (*EvalResult, error)
+}
+
+// EvalResult holds the evaluation verdict for a single thread
+type EvalResult struct {
+	PostID           string `json:"post_id"`
+	Verdict          string `json:"verdict"` // "keep" or "skip"
+	Reason           string `json:"reason"`
+	EstimatedEntries int    `json:"estimated_entries"`
+}
+
 // ANSI color codes for streaming output
 const (
 	colorDim   = "\033[90m" // dark gray — subdued streaming output

@@ -81,9 +81,16 @@ type FieldValue struct {
 	Reasoning  string     `json:"reasoning,omitempty"`
 }
 
-// ExtractionResult holds all extracted fields for a thread
-type ExtractionResult struct {
+// Entry represents a single distinct item extracted from a thread.
+// For example, one destination recommendation with all its associated fields.
+type Entry struct {
 	Fields []FieldValue `json:"fields"`
+}
+
+// ExtractionResult holds all extracted entries for a thread.
+// Each entry represents one distinct recommendation/item found in the thread.
+type ExtractionResult struct {
+	Entries []Entry `json:"entries"`
 }
 
 // ThreadState represents the extraction state of a single thread
@@ -97,7 +104,7 @@ type ThreadState struct {
 	Status      string        `json:"status"` // pending, collected, extracted, failed
 	CollectedAt *time.Time    `json:"collected_at,omitempty"`
 	ExtractedAt *time.Time    `json:"extracted_at,omitempty"`
-	Fields      []FieldValue  `json:"fields,omitempty"`
+	Entries     []Entry        `json:"entries,omitempty"`
 	Error       string        `json:"error,omitempty"`
 }
 

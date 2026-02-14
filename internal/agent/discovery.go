@@ -1,13 +1,11 @@
 package agent
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -18,11 +16,13 @@ import (
 // ClaudeDiscoverer uses Claude CLI to agentically discover subreddits
 type ClaudeDiscoverer struct {
 	promptDir string
+	model     string
+	runner    ClaudeRunner
 }
 
 // NewClaudeDiscoverer creates a new Claude-based subreddit discoverer
-func NewClaudeDiscoverer(promptDir string) *ClaudeDiscoverer {
-	return &ClaudeDiscoverer{promptDir: promptDir}
+func NewClaudeDiscoverer(promptDir, model string) *ClaudeDiscoverer {
+	return &ClaudeDiscoverer{promptDir: promptDir, model: model}
 }
 
 type discoveryResponse struct {
@@ -44,7 +44,11 @@ func (d *ClaudeDiscoverer) DiscoverSubreddits(ctx context.Context, form *types.F
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	response, err := d.callClaude(ctx, prompt, executable)
+	response, err := d.runner.Run(ctx, prompt, RunOpts{
+		AllowedTools: []string{fmt.Sprintf("Bash(%s *)", executable)},
+		MaxTurns:     15,
+		Model:        d.model,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("calling claude: %w", err)
 	}
@@ -84,71 +88,6 @@ func (d *ClaudeDiscoverer) renderPrompt(form *types.Form, query string, executab
 	}
 
 	return buf.String(), nil
-}
-
-func (d *ClaudeDiscoverer) callClaude(ctx context.Context, prompt string, executable string) (string, error) {
-	args := []string{
-		"-p", prompt,
-		"--output-format", "stream-json",
-		"--verbose",
-		"--allowedTools", fmt.Sprintf("Bash(%s *)", executable),
-		"--max-turns", "15",
-		"--model", "sonnet",
-	}
-
-	cmd := exec.CommandContext(ctx, "claude", args...)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", err
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("starting claude: %w", err)
-	}
-
-	// Stream Claude output in subdued color
-	fmt.Print(colorDim)
-	var responseBuilder strings.Builder
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		var event streamEvent
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			continue
-		}
-
-		if event.Type == "assistant" && event.Message != nil {
-			for _, block := range event.Message.Content {
-				if block.Type == "text" {
-					fmt.Print(block.Text)
-				}
-			}
-		} else if event.Type == "result" && event.Result != "" {
-			responseBuilder.Reset()
-			responseBuilder.WriteString(event.Result)
-		}
-	}
-	fmt.Print(colorReset + "\n")
-
-	var stderrBuf bytes.Buffer
-	stderrBuf.ReadFrom(stderr)
-
-	if err := cmd.Wait(); err != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
-		return "", fmt.Errorf("claude exited with error: %w, stderr: %s", err, stderrBuf.String())
-	}
-
-	return responseBuilder.String(), nil
 }
 
 func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {

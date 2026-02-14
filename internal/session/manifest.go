@@ -111,12 +111,12 @@ func UpdateThreadStatus(manifest *types.Manifest, postID, status string) bool {
 	return false
 }
 
-// UpdateThreadFields updates the extracted fields for a thread
-func UpdateThreadFields(manifest *types.Manifest, postID string, fields []types.FieldValue) bool {
+// UpdateThreadEntries updates the extracted entries for a thread
+func UpdateThreadEntries(manifest *types.Manifest, postID string, entries []types.Entry) bool {
 	for i := range manifest.Threads {
 		if manifest.Threads[i].PostID == postID {
 			now := time.Now()
-			manifest.Threads[i].Fields = fields
+			manifest.Threads[i].Entries = entries
 			manifest.Threads[i].Status = "extracted"
 			manifest.Threads[i].ExtractedAt = &now
 			manifest.UpdatedAt = now
@@ -133,6 +133,7 @@ func CountByStatus(manifest *types.Manifest) map[string]int {
 		"collected": 0,
 		"extracted": 0,
 		"failed":    0,
+		"skipped":   0,
 	}
 	for _, t := range manifest.Threads {
 		counts[t.Status]++

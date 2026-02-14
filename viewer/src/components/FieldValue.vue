@@ -30,7 +30,19 @@
           :key="i"
           class="text-xs text-gray-600 bg-gray-50 p-2 rounded"
         >
-          <span v-if="ev.author" class="font-medium">u/{{ ev.author }}: </span>
+          <a
+            v-if="ev.comment_id && threadPermalink"
+            :href="commentUrl(ev.comment_id)"
+            target="_blank"
+            class="inline-flex items-center gap-1 text-orange-600 hover:text-orange-800 hover:underline"
+          >
+            <span v-if="ev.author" class="font-medium">u/{{ ev.author }}</span>
+            <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
+          <template v-else>
+            <span v-if="ev.author" class="font-medium">u/{{ ev.author }}</span>
+          </template>
+          <span v-if="ev.author">: </span>
           "{{ truncate(ev.text, 150) }}"
         </div>
       </div>
@@ -41,12 +53,22 @@
 <script setup>
 import ConfidenceBadge from './ConfidenceBadge.vue'
 
-defineProps({
+const props = defineProps({
   field: {
     type: Object,
     required: true
+  },
+  threadPermalink: {
+    type: String,
+    default: ''
   }
 })
+
+function commentUrl(commentId) {
+  const base = 'https://www.reddit.com'
+  const permalink = props.threadPermalink.endsWith('/') ? props.threadPermalink : props.threadPermalink + '/'
+  return `${base}${permalink}${commentId}/`
+}
 
 function truncate(text, length) {
   if (!text) return ''
