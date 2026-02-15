@@ -1,27 +1,28 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"text/template"
+
+	claude "go-claude"
 
 	"threadminer/pkg/types"
 )
 
 // ClaudeEvaluator uses Claude CLI to evaluate individual thread relevance
 type ClaudeEvaluator struct {
-	promptDir string
-	model     string
-	runner    ClaudeRunner
+	runner  Runner
+	prompts fs.FS
+	model   string
 }
 
 // NewClaudeEvaluator creates a new Claude-based thread evaluator
-func NewClaudeEvaluator(promptDir, model string) *ClaudeEvaluator {
-	return &ClaudeEvaluator{promptDir: promptDir, model: model}
+func NewClaudeEvaluator(runner Runner, prompts fs.FS, model string) *ClaudeEvaluator {
+	return &ClaudeEvaluator{runner: runner, prompts: prompts, model: model}
 }
 
 // evalFileResult is the JSON structure the agent writes to the eval output file
@@ -48,15 +49,15 @@ func (e *ClaudeEvaluator) EvaluateThread(ctx context.Context, form *types.Form, 
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	_, err = e.runner.Run(ctx, prompt, RunOpts{
-		AllowedTools: []string{
+	_, err = e.runner.Run(ctx, prompt,
+		claude.WithAllowedTools(
 			fmt.Sprintf("Bash(%s *)", executable),
 			fmt.Sprintf("Bash(* > %s)", threadPath),
 			fmt.Sprintf("Write(%s/*)", sessionDir),
-		},
-		MaxTurns: 10,
-		Model:    e.model,
-	})
+		),
+		claude.WithMaxTurns(10),
+		claude.WithModel(e.model),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("calling claude: %w", err)
 	}
@@ -66,15 +67,9 @@ func (e *ClaudeEvaluator) EvaluateThread(ctx context.Context, form *types.Form, 
 }
 
 func (e *ClaudeEvaluator) renderPrompt(form *types.Form, thread types.ThreadState, executable string, evalPath string, threadPath string) (string, error) {
-	tmplPath := filepath.Join(e.promptDir, "evaluate_thread.md")
-	tmplData, err := os.ReadFile(tmplPath)
+	pt, err := claude.LoadPromptTemplate(e.prompts, "evaluate_thread.md", nil)
 	if err != nil {
-		return "", fmt.Errorf("reading template: %w", err)
-	}
-
-	tmpl, err := template.New("evaluate_thread").Parse(string(tmplData))
-	if err != nil {
-		return "", fmt.Errorf("parsing template: %w", err)
+		return "", fmt.Errorf("loading template: %w", err)
 	}
 
 	data := struct {
@@ -99,12 +94,7 @@ func (e *ClaudeEvaluator) renderPrompt(form *types.Form, thread types.ThreadStat
 		ThreadPath:      threadPath,
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("executing template: %w", err)
-	}
-
-	return buf.String(), nil
+	return pt.Render(data)
 }
 
 func (e *ClaudeEvaluator) parseEvalFile(path string) (*EvalResult, error) {

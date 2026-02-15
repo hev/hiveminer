@@ -1,28 +1,27 @@
 package agent
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
-	"text/template"
+
+	claude "go-claude"
 
 	"threadminer/pkg/types"
 )
 
 // ClaudeDiscoverer uses Claude CLI to agentically discover subreddits
 type ClaudeDiscoverer struct {
-	promptDir string
-	model     string
-	runner    ClaudeRunner
+	runner  Runner
+	prompts fs.FS
+	model   string
 }
 
 // NewClaudeDiscoverer creates a new Claude-based subreddit discoverer
-func NewClaudeDiscoverer(promptDir, model string) *ClaudeDiscoverer {
-	return &ClaudeDiscoverer{promptDir: promptDir, model: model}
+func NewClaudeDiscoverer(runner Runner, prompts fs.FS, model string) *ClaudeDiscoverer {
+	return &ClaudeDiscoverer{runner: runner, prompts: prompts, model: model}
 }
 
 type discoveryResponse struct {
@@ -44,28 +43,22 @@ func (d *ClaudeDiscoverer) DiscoverSubreddits(ctx context.Context, form *types.F
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	response, err := d.runner.Run(ctx, prompt, RunOpts{
-		AllowedTools: []string{fmt.Sprintf("Bash(%s *)", executable)},
-		MaxTurns:     15,
-		Model:        d.model,
-	})
+	result, err := d.runner.Run(ctx, prompt,
+		claude.WithAllowedTools(fmt.Sprintf("Bash(%s *)", executable)),
+		claude.WithMaxTurns(15),
+		claude.WithModel(d.model),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("calling claude: %w", err)
 	}
 
-	return d.parseResponse(response)
+	return d.parseResponse(result.Text)
 }
 
 func (d *ClaudeDiscoverer) renderPrompt(form *types.Form, query string, executable string) (string, error) {
-	tmplPath := filepath.Join(d.promptDir, "discover_subreddits.md")
-	tmplData, err := os.ReadFile(tmplPath)
+	pt, err := claude.LoadPromptTemplate(d.prompts, "discover_subreddits.md", nil)
 	if err != nil {
-		return "", fmt.Errorf("reading template: %w", err)
-	}
-
-	tmpl, err := template.New("discover").Parse(string(tmplData))
-	if err != nil {
-		return "", fmt.Errorf("parsing template: %w", err)
+		return "", fmt.Errorf("loading template: %w", err)
 	}
 
 	data := struct {
@@ -82,30 +75,13 @@ func (d *ClaudeDiscoverer) renderPrompt(form *types.Form, query string, executab
 		Executable:      executable,
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("executing template: %w", err)
-	}
-
-	return buf.String(), nil
+	return pt.Render(data)
 }
 
 func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {
-	// Strip markdown code fences that LLMs sometimes wrap around JSON
-	response = stripCodeFences(response)
-
-	jsonStart := strings.Index(response, "{")
-	jsonEnd := strings.LastIndex(response, "}")
-
-	if jsonStart == -1 || jsonEnd == -1 {
-		return nil, fmt.Errorf("no JSON found in response")
-	}
-
-	jsonStr := response[jsonStart : jsonEnd+1]
-
 	var parsed discoveryResponse
-	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
-		return nil, fmt.Errorf("parsing JSON: %w, json: %s", err, jsonStr)
+	if err := claude.ExtractJSON(response, &parsed); err != nil {
+		return nil, fmt.Errorf("extracting JSON: %w", err)
 	}
 
 	if len(parsed.Subreddits) == 0 {

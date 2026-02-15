@@ -1,28 +1,30 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	claude "go-claude"
 
 	"threadminer/pkg/types"
 )
 
 // ClaudeThreadDiscoverer uses Claude CLI to agentically discover relevant threads
 type ClaudeThreadDiscoverer struct {
-	promptDir string
-	model     string
-	runner    ClaudeRunner
+	runner  Runner
+	prompts fs.FS
+	model   string
 }
 
 // NewClaudeThreadDiscoverer creates a new Claude-based thread discoverer
-func NewClaudeThreadDiscoverer(promptDir, model string) *ClaudeThreadDiscoverer {
-	return &ClaudeThreadDiscoverer{promptDir: promptDir, model: model}
+func NewClaudeThreadDiscoverer(runner Runner, prompts fs.FS, model string) *ClaudeThreadDiscoverer {
+	return &ClaudeThreadDiscoverer{runner: runner, prompts: prompts, model: model}
 }
 
 // discoveryResult is the JSON structure the agent writes to the output file
@@ -57,14 +59,14 @@ func (d *ClaudeThreadDiscoverer) DiscoverThreads(ctx context.Context, form *type
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	_, err = d.runner.Run(ctx, prompt, RunOpts{
-		AllowedTools: []string{
+	_, err = d.runner.Run(ctx, prompt,
+		claude.WithAllowedTools(
 			fmt.Sprintf("Bash(%s *)", executable),
 			fmt.Sprintf("Write(%s/*)", sessionDir),
-		},
-		MaxTurns: 25,
-		Model:    d.model,
-	})
+		),
+		claude.WithMaxTurns(25),
+		claude.WithModel(d.model),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("calling claude: %w", err)
 	}
@@ -74,21 +76,15 @@ func (d *ClaudeThreadDiscoverer) DiscoverThreads(ctx context.Context, form *type
 }
 
 func (d *ClaudeThreadDiscoverer) renderPrompt(form *types.Form, query string, subreddits []string, limit int, executable string, outputPath string) (string, error) {
-	tmplPath := filepath.Join(d.promptDir, "discover_threads.md")
-	tmplData, err := os.ReadFile(tmplPath)
-	if err != nil {
-		return "", fmt.Errorf("reading template: %w", err)
-	}
-
 	funcMap := template.FuncMap{
 		"joinHints": func(hints []string) string {
 			return strings.Join(hints, ", ")
 		},
 	}
 
-	tmpl, err := template.New("discover_threads").Funcs(funcMap).Parse(string(tmplData))
+	pt, err := claude.LoadPromptTemplate(d.prompts, "discover_threads.md", funcMap)
 	if err != nil {
-		return "", fmt.Errorf("parsing template: %w", err)
+		return "", fmt.Errorf("loading template: %w", err)
 	}
 
 	data := struct {
@@ -113,12 +109,7 @@ func (d *ClaudeThreadDiscoverer) renderPrompt(form *types.Form, query string, su
 		OutputPath:      outputPath,
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("executing template: %w", err)
-	}
-
-	return buf.String(), nil
+	return pt.Render(data)
 }
 
 func (d *ClaudeThreadDiscoverer) parseOutputFile(path string) ([]types.Post, error) {

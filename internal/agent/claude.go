@@ -1,31 +1,29 @@
 package agent
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"strings"
-	"text/template"
+	"io/fs"
+
+	claude "go-claude"
 
 	"threadminer/pkg/types"
 )
 
 // ClaudeExtractor implements Extractor using the Claude CLI
 type ClaudeExtractor struct {
-	promptDir string
-	model     string
-	runner    ClaudeRunner
+	runner  Runner
+	prompts fs.FS
+	model   string
 }
 
 // NewClaudeExtractor creates a new Claude CLI extractor
-func NewClaudeExtractor(promptDir, model string) *ClaudeExtractor {
+func NewClaudeExtractor(runner Runner, prompts fs.FS, model string) *ClaudeExtractor {
 	return &ClaudeExtractor{
-		promptDir: promptDir,
-		model:     model,
+		runner:  runner,
+		prompts: prompts,
+		model:   model,
 	}
 }
 
@@ -43,45 +41,43 @@ func (c *ClaudeExtractor) ExtractFieldsWithOutput(ctx context.Context, thread *t
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
+	// Build run options
+	opts := []claude.RunOption{claude.WithModel(c.model)}
+	if output != nil {
+		opts = append(opts, claude.WithOutputStream(output))
+	}
+
 	// Call Claude CLI
-	response, err := c.runner.Run(ctx, prompt, RunOpts{
-		Model:  c.model,
-		Output: output,
-	})
+	result, err := c.runner.Run(ctx, prompt, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("calling claude: %w", err)
 	}
 
 	// Parse the response
-	result, err := c.parseResponse(response, form)
+	parsed, err := c.parseResponse(result.Text, form)
 	if err != nil {
 		return nil, fmt.Errorf("parsing response: %w", err)
 	}
 
-	return result, nil
+	// Build comment links from evidence
+	populateLinks(parsed, thread.Post.Permalink)
+
+	return parsed, nil
 }
 
 // renderPrompt renders the extraction prompt template
 func (c *ClaudeExtractor) renderPrompt(thread *types.Thread, form *types.Form) (string, error) {
-	// Load template
-	tmplPath := filepath.Join(c.promptDir, "extract.md")
-	tmplData, err := os.ReadFile(tmplPath)
+	pt, err := claude.LoadPromptTemplate(c.prompts, "extract.md", nil)
 	if err != nil {
-		return "", fmt.Errorf("reading prompt template: %w", err)
-	}
-
-	tmpl, err := template.New("extract").Parse(string(tmplData))
-	if err != nil {
-		return "", fmt.Errorf("parsing prompt template: %w", err)
+		return "", fmt.Errorf("loading prompt template: %w", err)
 	}
 
 	// Format comments
-	var commentsBuilder strings.Builder
+	var comments string
 	for _, comment := range flattenComments(thread.Comments) {
-		commentsBuilder.WriteString(fmt.Sprintf("[comment_id:%s][%d points] u/%s:\n%s\n\n", comment.ID, comment.Score, comment.Author, comment.Body))
+		comments += fmt.Sprintf("[comment_id:%s][%d points] u/%s:\n%s\n\n", comment.ID, comment.Score, comment.Author, comment.Body)
 	}
 
-	// Build template data
 	data := struct {
 		FormTitle       string
 		FormDescription string
@@ -100,33 +96,15 @@ func (c *ClaudeExtractor) renderPrompt(thread *types.Thread, form *types.Form) (
 		Author:          thread.Post.Author,
 		Score:           thread.Post.Score,
 		PostContent:     thread.Post.Selftext,
-		Comments:        commentsBuilder.String(),
+		Comments:        comments,
 		Fields:          form.Fields,
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("executing template: %w", err)
-	}
-
-	return buf.String(), nil
+	return pt.Render(data)
 }
 
 // parseResponse parses Claude's JSON response into extraction results
 func (c *ClaudeExtractor) parseResponse(response string, form *types.Form) (*types.ExtractionResult, error) {
-	// Strip markdown code fences that LLMs sometimes wrap around JSON
-	response = stripCodeFences(response)
-
-	// Find JSON in the response
-	jsonStart := strings.Index(response, "{")
-	jsonEnd := strings.LastIndex(response, "}")
-
-	if jsonStart == -1 || jsonEnd == -1 {
-		return nil, fmt.Errorf("no JSON found in response")
-	}
-
-	jsonStr := response[jsonStart : jsonEnd+1]
-
 	var parsed struct {
 		Entries []struct {
 			Fields []struct {
@@ -138,8 +116,8 @@ func (c *ClaudeExtractor) parseResponse(response string, form *types.Form) (*typ
 		} `json:"entries"`
 	}
 
-	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
-		return nil, fmt.Errorf("parsing JSON: %w, json: %s", err, jsonStr)
+	if err := claude.ExtractJSON(response, &parsed); err != nil {
+		return nil, fmt.Errorf("extracting JSON: %w", err)
 	}
 
 	result := &types.ExtractionResult{
@@ -175,6 +153,43 @@ type evidence struct {
 	Text      string `json:"text"`
 	CommentID string `json:"comment_id,omitempty"`
 	Author    string `json:"author,omitempty"`
+}
+
+// populateLinks builds Reddit comment permalink arrays on each field and entry
+// from the comment_ids found in evidence.
+func populateLinks(result *types.ExtractionResult, postPermalink string) {
+	if postPermalink == "" {
+		return
+	}
+	// Ensure trailing slash
+	if postPermalink[len(postPermalink)-1] != '/' {
+		postPermalink += "/"
+	}
+
+	for i := range result.Entries {
+		seen := map[string]bool{}
+		for j := range result.Entries[i].Fields {
+			fieldSeen := map[string]bool{}
+			for _, ev := range result.Entries[i].Fields[j].Evidence {
+				cid := ev.CommentID
+				if cid == "" || cid == "post_content" {
+					continue
+				}
+				link := postPermalink + cid + "/"
+				if !fieldSeen[link] {
+					fieldSeen[link] = true
+					result.Entries[i].Fields[j].Links = append(result.Entries[i].Fields[j].Links, link)
+				}
+				if !seen[link] {
+					seen[link] = true
+				}
+			}
+		}
+		// Entry-level deduped links
+		for link := range seen {
+			result.Entries[i].Links = append(result.Entries[i].Links, link)
+		}
+	}
 }
 
 // flattenComments flattens nested comments into a list

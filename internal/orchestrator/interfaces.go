@@ -15,10 +15,11 @@ type RunConfig struct {
 	Limit          int
 	Sort           string
 	OutputDir      string
-	Workers        int    // concurrent extraction workers (default 4)
+	Workers        int    // concurrent extraction workers (default 10)
 	DiscoveryModel string // model for phases 0+1 (default "opus")
 	EvalModel      string // model for phase 2 (default "opus")
 	ExtractModel   string // model for phase 3 (default "haiku")
+	RankModel      string // model for phase 4 (default "haiku")
 }
 
 // Orchestrator defines the interface for running extraction pipelines

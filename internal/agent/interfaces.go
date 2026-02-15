@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"strings"
 
 	"threadminer/pkg/types"
 )
@@ -39,25 +38,28 @@ type EvalResult struct {
 	EstimatedEntries int    `json:"estimated_entries"`
 }
 
-// ANSI color codes for streaming output
-const (
-	colorDim   = "\033[90m" // dark gray — subdued streaming output
-	colorReset = "\033[0m"
-)
+// Ranker defines the interface for ranking extracted entries
+type Ranker interface {
+	// RankEntries scores and flags entries using algorithmic + agentic assessment
+	RankEntries(ctx context.Context, form *types.Form, entries []RankInput) ([]RankOutput, error)
+}
 
-// stripCodeFences removes markdown code fences from LLM responses so the
-// JSON inside can be parsed cleanly. Handles ```json ... ``` wrapping and
-// duplicated blocks that some models produce.
-func stripCodeFences(s string) string {
-	var result strings.Builder
-	lines := strings.Split(s, "\n")
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") {
-			continue
-		}
-		result.WriteString(line)
-		result.WriteByte('\n')
-	}
-	return result.String()
+// RankInput provides entry data with thread-level signals for ranking
+type RankInput struct {
+	ThreadPostID string
+	EntryIndex   int
+	Entry        types.Entry
+	ThreadScore  int
+	NumComments  int
+}
+
+// RankOutput holds the ranking result for a single entry
+type RankOutput struct {
+	ThreadPostID string   // identifies which thread
+	EntryIndex   int      // identifies which entry within thread
+	AlgoScore    float64  // algorithmic score 0-100
+	Penalty      float64  // agentic penalty (negative)
+	FinalScore   float64  // algo + penalty, clamped >= 0
+	Flags        []string // spam, joke, etc.
+	Reason       string   // Claude's assessment text
 }

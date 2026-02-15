@@ -132,6 +132,7 @@ func CountByStatus(manifest *types.Manifest) map[string]int {
 		"pending":   0,
 		"collected": 0,
 		"extracted": 0,
+		"ranked":    0,
 		"failed":    0,
 		"skipped":   0,
 	}
@@ -161,6 +162,31 @@ func GetCollectedThreads(manifest *types.Manifest) []types.ThreadState {
 		}
 	}
 	return collected
+}
+
+// GetExtractedThreads returns threads that have been extracted
+func GetExtractedThreads(manifest *types.Manifest) []types.ThreadState {
+	var extracted []types.ThreadState
+	for _, t := range manifest.Threads {
+		if t.Status == "extracted" {
+			extracted = append(extracted, t)
+		}
+	}
+	return extracted
+}
+
+// UpdateThreadRanked marks a thread as ranked and sets the RankedAt timestamp
+func UpdateThreadRanked(manifest *types.Manifest, postID string) bool {
+	for i := range manifest.Threads {
+		if manifest.Threads[i].PostID == postID {
+			now := time.Now()
+			manifest.Threads[i].Status = "ranked"
+			manifest.Threads[i].RankedAt = &now
+			manifest.UpdatedAt = now
+			return true
+		}
+	}
+	return false
 }
 
 // StartRun creates a new run log entry

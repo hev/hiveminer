@@ -6,6 +6,39 @@ import (
 	"threadminer/pkg/types"
 )
 
+// MockRanker implements Ranker for testing
+type MockRanker struct {
+	Results []RankOutput
+	Err     error
+}
+
+// NewMockRanker creates a new mock ranker
+func NewMockRanker() *MockRanker {
+	return &MockRanker{}
+}
+
+// RankEntries returns mock ranking results with basic algorithmic scores
+func (m *MockRanker) RankEntries(ctx context.Context, form *types.Form, entries []RankInput) ([]RankOutput, error) {
+	if m.Err != nil {
+		return nil, m.Err
+	}
+	if m.Results != nil {
+		return m.Results, nil
+	}
+
+	// Return basic scores
+	outputs := make([]RankOutput, len(entries))
+	for i, input := range entries {
+		outputs[i] = RankOutput{
+			ThreadPostID: input.ThreadPostID,
+			EntryIndex:   input.EntryIndex,
+			AlgoScore:    50,
+			FinalScore:   50,
+		}
+	}
+	return outputs, nil
+}
+
 // MockExtractor implements Extractor for testing
 type MockExtractor struct {
 	Results map[string]*types.ExtractionResult

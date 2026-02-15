@@ -78,13 +78,18 @@ type FieldValue struct {
 	Value      any        `json:"value"`
 	Confidence float64    `json:"confidence"`
 	Evidence   []Evidence `json:"evidence,omitempty"`
+	Links      []string   `json:"links,omitempty"`
 	Reasoning  string     `json:"reasoning,omitempty"`
 }
 
 // Entry represents a single distinct item extracted from a thread.
 // For example, one destination recommendation with all its associated fields.
 type Entry struct {
-	Fields []FieldValue `json:"fields"`
+	Fields     []FieldValue `json:"fields"`
+	Links      []string     `json:"links,omitempty"`
+	RankScore  *float64     `json:"rank_score,omitempty"`
+	RankFlags  []string     `json:"rank_flags,omitempty"`
+	RankReason string       `json:"rank_reason,omitempty"`
 }
 
 // ExtractionResult holds all extracted entries for a thread.
@@ -101,9 +106,10 @@ type ThreadState struct {
 	Subreddit   string        `json:"subreddit"`
 	Score       int           `json:"score"`
 	NumComments int           `json:"num_comments"`
-	Status      string        `json:"status"` // pending, collected, extracted, failed
+	Status      string        `json:"status"` // pending, collected, extracted, ranked, failed
 	CollectedAt *time.Time    `json:"collected_at,omitempty"`
 	ExtractedAt *time.Time    `json:"extracted_at,omitempty"`
+	RankedAt    *time.Time    `json:"ranked_at,omitempty"`
 	Entries     []Entry        `json:"entries,omitempty"`
 	Error       string        `json:"error,omitempty"`
 }

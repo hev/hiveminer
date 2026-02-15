@@ -9,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 
+	claude "go-claude"
+
 	"threadminer/internal/agent"
 	"threadminer/internal/orchestrator"
 	"threadminer/internal/schema"
@@ -23,10 +25,11 @@ func cmdRun(args []string) error {
 	limit := fs.Int("limit", 20, "Maximum number of threads to process")
 	sort := fs.String("sort", "hot", "Sort method for subreddit listing: hot, new, top, rising")
 	outputDir := fs.String("output", "./output", "Output directory for session")
-	workers := fs.Int("workers", 4, "Concurrent extraction workers")
+	workers := fs.Int("workers", 10, "Concurrent extraction workers")
 	discoveryModel := fs.String("discovery-model", "opus", "Model for phases 0+1 (subreddit/thread discovery)")
 	evalModel := fs.String("eval-model", "opus", "Model for phase 2 (thread evaluation)")
 	extractModel := fs.String("extract-model", "haiku", "Model for phase 3 (field extraction)")
+	rankModel := fs.String("rank-model", "haiku", "Model for phase 4 (entry ranking)")
 	fs.StringVar(query, "q", "", "Search query (shorthand)")
 	fs.StringVar(subreddits, "r", "", "Subreddits (shorthand)")
 	fs.IntVar(limit, "l", 20, "Limit (shorthand)")
@@ -79,12 +82,18 @@ func cmdRun(args []string) error {
 		cancel()
 	}()
 
+	// Create shared Claude client and prompt filesystem
+	client := claude.NewClient()
+	prompts := os.DirFS("prompts")
+
 	// Create orchestrator with agentic phases
 	searcher := search.NewRedditSearcher()
 	orch := orchestrator.New(searcher)
-	orch.SetThreadDiscoverer(agent.NewClaudeThreadDiscoverer("prompts", *discoveryModel))
-	orch.SetThreadEvaluator(agent.NewClaudeEvaluator("prompts", *evalModel))
-	orch.SetExtractor(agent.NewClaudeExtractor("prompts", *extractModel))
+	orch.SetDiscoverer(agent.NewClaudeDiscoverer(client, prompts, *discoveryModel))
+	orch.SetThreadDiscoverer(agent.NewClaudeThreadDiscoverer(client, prompts, *discoveryModel))
+	orch.SetThreadEvaluator(agent.NewClaudeEvaluator(client, prompts, *evalModel))
+	orch.SetExtractor(agent.NewClaudeExtractor(client, prompts, *extractModel))
+	orch.SetRanker(agent.NewClaudeRanker(client, prompts, *rankModel))
 
 	// Run extraction
 	config := orchestrator.RunConfig{
@@ -99,6 +108,7 @@ func cmdRun(args []string) error {
 		DiscoveryModel: *discoveryModel,
 		EvalModel:      *evalModel,
 		ExtractModel:   *extractModel,
+		RankModel:      *rankModel,
 	}
 
 	sessionDir, err := orch.Run(ctx, config)

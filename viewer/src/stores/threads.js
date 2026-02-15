@@ -20,7 +20,27 @@ export const useThreadStore = defineStore('threads', {
 
     extractedThreads: (state) => {
       if (!state.manifest) return []
-      return state.manifest.threads.filter(t => t.status === 'extracted')
+      return state.manifest.threads.filter(t => t.status === 'extracted' || t.status === 'ranked')
+    },
+
+    rankedEntries: (state) => {
+      if (!state.manifest) return []
+      const entries = []
+      for (const thread of state.manifest.threads) {
+        if ((thread.status === 'extracted' || thread.status === 'ranked') && thread.entries) {
+          for (const entry of thread.entries) {
+            entries.push({ ...entry, _thread: thread })
+          }
+        }
+      }
+      // Sort by rank_score descending, unscored last
+      entries.sort((a, b) => {
+        if (a.rank_score == null && b.rank_score == null) return 0
+        if (a.rank_score == null) return 1
+        if (b.rank_score == null) return -1
+        return b.rank_score - a.rank_score
+      })
+      return entries
     }
   },
 

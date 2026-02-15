@@ -25,6 +25,7 @@ type DefaultOrchestrator struct {
 	discoverer       agent.Discoverer
 	threadDiscoverer agent.ThreadDiscoverer
 	threadEvaluator  agent.ThreadEvaluator
+	ranker           agent.Ranker
 }
 
 // New creates a new orchestrator with a searcher
@@ -52,6 +53,11 @@ func (o *DefaultOrchestrator) SetThreadDiscoverer(td agent.ThreadDiscoverer) {
 // SetThreadEvaluator sets the agentic thread evaluator to use
 func (o *DefaultOrchestrator) SetThreadEvaluator(te agent.ThreadEvaluator) {
 	o.threadEvaluator = te
+}
+
+// SetRanker sets the entry ranker to use
+func (o *DefaultOrchestrator) SetRanker(r agent.Ranker) {
+	o.ranker = r
 }
 
 // Run executes the full extraction pipeline and returns the session directory
@@ -97,6 +103,8 @@ func (o *DefaultOrchestrator) Run(ctx context.Context, config RunConfig) (string
 		return "", fmt.Errorf("saving manifest: %w", err)
 	}
 
+	runStart := time.Now()
+
 	// Phase 0: Subreddit Discovery
 	if config.Query != "" && len(config.Subreddits) == 0 {
 		if manifest.DiscoveredSubreddits && len(manifest.Subreddits) > 0 {
@@ -104,76 +112,64 @@ func (o *DefaultOrchestrator) Run(ctx context.Context, config RunConfig) (string
 			config.Subreddits = manifest.Subreddits
 		} else {
 			fmt.Println("\n=== Phase 0: Subreddit Discovery ===")
-			if o.discoverer == nil {
-				o.discoverer = agent.NewClaudeDiscoverer("prompts", config.DiscoveryModel)
-			}
-			discovered, err := o.discoverer.DiscoverSubreddits(ctx, config.Form, config.Query)
-			if err != nil {
-				fmt.Printf("  Warning: subreddit discovery failed: %v\n", err)
-				fmt.Println("  Falling back to searching all of Reddit")
-			} else if len(discovered) > 0 {
-				fmt.Printf("Discovered %d subreddits:\n", len(discovered))
-				for _, name := range discovered {
-					fmt.Printf("  r/%s\n", name)
+			phase0Start := time.Now()
+			if o.discoverer != nil {
+				discovered, err := o.discoverer.DiscoverSubreddits(ctx, config.Form, config.Query)
+				if err != nil {
+					fmt.Printf("  Warning: subreddit discovery failed: %v\n", err)
+					fmt.Println("  Falling back to searching all of Reddit")
+				} else if len(discovered) > 0 {
+					fmt.Printf("Discovered %d subreddits:\n", len(discovered))
+					for _, name := range discovered {
+						fmt.Printf("  r/%s\n", name)
+					}
+					config.Subreddits = discovered
+					manifest.Subreddits = discovered
+					manifest.DiscoveredSubreddits = true
+					if err := session.SaveManifest(sessionDir, manifest); err != nil {
+						return "", fmt.Errorf("saving manifest: %w", err)
+					}
 				}
-				config.Subreddits = discovered
-				manifest.Subreddits = discovered
-				manifest.DiscoveredSubreddits = true
-				if err := session.SaveManifest(sessionDir, manifest); err != nil {
-					return "", fmt.Errorf("saving manifest: %w", err)
-				}
 			}
+			fmt.Printf("  Phase 0 completed in %s\n", formatDuration(time.Since(phase0Start)))
 		}
 	}
 
-	// Phases 1+2+3 with retry loop: discover threads, then evaluate+extract in parallel
-	const maxRounds = 3
-	var totalProcessed int
-	for round := 0; round < maxRounds; round++ {
+	// Phases 1+2+3: Streaming pipeline — discover threads and evaluate+extract in parallel
+	pipelineStart := time.Now()
+	totalProcessed, err := o.runPipeline(ctx, config, manifest, sessionDir)
+	if err != nil {
 		if ctx.Err() != nil {
 			session.CompleteRun(manifest, "interrupted", totalProcessed)
 			session.SaveManifest(sessionDir, manifest)
 			return sessionDir, ctx.Err()
 		}
+		return "", err
+	}
 
-		// Check if we already have enough extracted threads
-		counts := session.CountByStatus(manifest)
-		if counts["extracted"] >= config.Limit {
-			fmt.Printf("Already have %d extracted threads (target: %d)\n", counts["extracted"], config.Limit)
-			break
-		}
+	fmt.Printf("  Pipeline completed in %s\n", formatDuration(time.Since(pipelineStart)))
 
-		if round > 0 {
-			fmt.Printf("\n=== Retry round %d: need more threads (have %d extracted, need %d) ===\n", round+1, counts["extracted"], config.Limit)
-		}
+	if ctx.Err() != nil {
+		session.CompleteRun(manifest, "interrupted", totalProcessed)
+		session.SaveManifest(sessionDir, manifest)
+		return sessionDir, ctx.Err()
+	}
 
-		// Phase 1: Agentic Thread Discovery
-		fmt.Println("\n=== Phase 1: Thread Discovery ===")
-		if err := o.discover(ctx, config, manifest, sessionDir); err != nil {
+	// Phase 4: Rank all extracted entries
+	if o.ranker != nil {
+		fmt.Println("\n=== Phase 4: Ranking ===")
+		phase4Start := time.Now()
+		ranked, err := o.rankEntries(ctx, config, manifest, sessionDir)
+		if err != nil {
 			if ctx.Err() != nil {
 				session.CompleteRun(manifest, "interrupted", totalProcessed)
 				session.SaveManifest(sessionDir, manifest)
 				return sessionDir, ctx.Err()
 			}
-			return "", fmt.Errorf("discovery: %w", err)
-		}
-
-		// Phase 2+3: Evaluate & Extract in parallel
-		fmt.Println("\n=== Phase 2+3: Evaluate & Extract ===")
-		processed, err := o.evaluateAndExtract(ctx, config, manifest, sessionDir)
-		if err != nil {
-			if ctx.Err() != nil {
-				session.CompleteRun(manifest, "interrupted", totalProcessed+processed)
-				session.SaveManifest(sessionDir, manifest)
-				return sessionDir, ctx.Err()
-			}
-			return "", fmt.Errorf("evaluate+extract: %w", err)
-		}
-		totalProcessed += processed
-
-		counts = session.CountByStatus(manifest)
-		if counts["extracted"] >= config.Limit {
-			break
+			fmt.Printf("  Warning: ranking failed: %v\n", err)
+			fmt.Println("  Continuing without ranking")
+		} else {
+			fmt.Printf("  Ranked %d entries (%s)\n", ranked, formatDuration(time.Since(phase4Start)))
 		}
 	}
 
@@ -184,140 +180,18 @@ func (o *DefaultOrchestrator) Run(ctx context.Context, config RunConfig) (string
 	}
 
 	// Print summary
+	totalDuration := time.Since(runStart)
 	counts := session.CountByStatus(manifest)
-	fmt.Printf("\n=== Complete ===\n")
+	fmt.Printf("\n=== Complete (%s) ===\n", formatDuration(totalDuration))
 	fmt.Printf("Session: %s\n", sessionDir)
 	fmt.Printf("Threads: %d total\n", len(manifest.Threads))
+	fmt.Printf("  - Ranked: %d\n", counts["ranked"])
 	fmt.Printf("  - Extracted: %d\n", counts["extracted"])
 	fmt.Printf("  - Collected: %d\n", counts["collected"])
 	fmt.Printf("  - Skipped: %d\n", counts["skipped"])
 	fmt.Printf("  - Failed: %d\n", counts["failed"])
 
 	return sessionDir, nil
-}
-
-// discover finds threads matching the search criteria using the agentic discoverer
-func (o *DefaultOrchestrator) discover(ctx context.Context, config RunConfig, manifest *types.Manifest, sessionDir string) error {
-	// Count threads that are still actionable (not skipped/failed)
-	counts := session.CountByStatus(manifest)
-	actionable := counts["pending"] + counts["collected"] + counts["extracted"]
-	overprovisionTarget := config.Limit * 3
-
-	if actionable >= overprovisionTarget {
-		fmt.Printf("Already have %d actionable threads (target: %d), skipping discovery\n", actionable, overprovisionTarget)
-		return nil
-	}
-
-	remaining := overprovisionTarget - actionable
-
-	// Use agentic thread discoverer if available
-	if o.threadDiscoverer != nil {
-		fmt.Printf("Agent discovering %d threads across %v\n", remaining, config.Subreddits)
-
-		// Ensure session dir exists for the agent to write to
-		if err := os.MkdirAll(sessionDir, 0755); err != nil {
-			return fmt.Errorf("creating session dir: %w", err)
-		}
-
-		posts, err := o.threadDiscoverer.DiscoverThreads(ctx, config.Form, config.Query, config.Subreddits, remaining, sessionDir)
-		if err != nil {
-			fmt.Printf("  Warning: agentic discovery failed: %v\n", err)
-			fmt.Println("  Falling back to direct search")
-			return o.discoverDirect(ctx, config, manifest, sessionDir, remaining)
-		}
-
-		return o.addDiscoveredPosts(posts, manifest, sessionDir, remaining)
-	}
-
-	// Fallback to direct search
-	return o.discoverDirect(ctx, config, manifest, sessionDir, remaining)
-}
-
-// discoverDirect performs non-agentic thread discovery using direct API calls
-func (o *DefaultOrchestrator) discoverDirect(ctx context.Context, config RunConfig, manifest *types.Manifest, sessionDir string, remaining int) error {
-	var posts []types.Post
-
-	if config.Query != "" {
-		// Search mode
-		for _, sub := range config.Subreddits {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-
-			fmt.Printf("Searching r/%s for: %s\n", sub, config.Query)
-			subPosts, err := o.searcher.Search(ctx, config.Query, sub, remaining)
-			if err != nil {
-				fmt.Printf("  Warning: search failed: %v\n", err)
-				continue
-			}
-			posts = append(posts, subPosts...)
-			fmt.Printf("  Found %d posts\n", len(subPosts))
-		}
-
-		// If no subreddits specified, search all
-		if len(config.Subreddits) == 0 {
-			fmt.Printf("Searching all of Reddit for: %s\n", config.Query)
-			subPosts, err := o.searcher.Search(ctx, config.Query, "all", remaining)
-			if err != nil {
-				return err
-			}
-			posts = subPosts
-			fmt.Printf("  Found %d posts\n", len(subPosts))
-		}
-	} else {
-		// List mode
-		for _, sub := range config.Subreddits {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-
-			fmt.Printf("Listing r/%s (%s)\n", sub, config.Sort)
-			subPosts, err := o.searcher.ListSubreddit(ctx, sub, config.Sort, remaining)
-			if err != nil {
-				fmt.Printf("  Warning: list failed: %v\n", err)
-				continue
-			}
-			posts = append(posts, subPosts...)
-			fmt.Printf("  Found %d posts\n", len(subPosts))
-		}
-	}
-
-	return o.addDiscoveredPosts(posts, manifest, sessionDir, remaining)
-}
-
-// addDiscoveredPosts adds discovered posts to the manifest
-func (o *DefaultOrchestrator) addDiscoveredPosts(posts []types.Post, manifest *types.Manifest, sessionDir string, remaining int) error {
-	added := 0
-	for _, post := range posts {
-		if added >= remaining {
-			break
-		}
-
-		// Skip if already in manifest
-		if session.FindThread(manifest, post.ID) != nil {
-			continue
-		}
-
-		thread := types.ThreadState{
-			PostID:      post.ID,
-			Permalink:   post.Permalink,
-			Title:       post.Title,
-			Subreddit:   post.Subreddit,
-			Score:       post.Score,
-			NumComments: post.NumComments,
-			Status:      "pending",
-		}
-		session.AddThread(manifest, thread)
-		added++
-	}
-
-	fmt.Printf("Added %d new threads to session\n", added)
-
-	if err := session.SaveManifest(sessionDir, manifest); err != nil {
-		return fmt.Errorf("saving manifest: %w", err)
-	}
-
-	return nil
 }
 
 // outputExtractor is an optional interface for extractors that support directing output to a writer
@@ -351,41 +225,23 @@ type workItem struct {
 	needsEval bool // true for pending threads, false for already-collected threads
 }
 
-// evaluateAndExtract runs evaluation and extraction in a single parallel pipeline.
-// Pending threads are evaluated first; if kept, extraction follows immediately in the same worker.
-// Already-collected threads (from resume) skip evaluation and go straight to extraction.
-func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config RunConfig, manifest *types.Manifest, sessionDir string) (int, error) {
+// runPipeline executes the streaming discovery + evaluate + extract pipeline.
+// Workers run continuously while discovery feeds them threads across multiple rounds.
+// Manifest saves are batched via a periodic saver instead of per-update.
+func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig, manifest *types.Manifest, sessionDir string) (int, error) {
 	if o.extractor == nil {
-		o.extractor = agent.NewClaudeExtractor("prompts", config.ExtractModel)
+		return 0, fmt.Errorf("no extractor configured")
 	}
 
-	// Gather work: pending threads need eval+extract, collected threads need extract only
-	pending := session.GetPendingThreads(manifest)
-	collected := session.GetCollectedThreads(manifest)
-
-	var items []workItem
-	for _, ts := range pending {
-		items = append(items, workItem{ts, true})
-	}
-	for _, ts := range collected {
-		items = append(items, workItem{ts, false})
-	}
-
-	if len(items) == 0 {
-		fmt.Println("No threads to process")
-		return 0, nil
-	}
-
-	// Determine worker count
 	workers := config.Workers
 	if workers <= 0 {
-		workers = 4
+		workers = 10
 	}
-	if workers > len(items) {
-		workers = len(items)
+	if workers > 50 {
+		workers = 50
 	}
 
-	// Open extraction log file
+	// Log file
 	logPath := filepath.Join(sessionDir, "extraction.log")
 	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -394,30 +250,50 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 	defer logFile.Close()
 	logWriter := &syncWriter{w: logFile}
 
-	fmt.Printf("Processing %d threads with %d workers (%d to evaluate, %d to extract)\n",
-		len(items), workers, len(pending), len(collected))
-
-	// Fill work channel
-	work := make(chan workItem, len(items))
-	for _, item := range items {
-		work <- item
-	}
-	close(work)
-
 	var (
-		mu        sync.Mutex
+		mu        sync.Mutex // protects manifest and processed
 		wg        sync.WaitGroup
+		processed int
 		extracted atomic.Int64
 		done      atomic.Int64
-		total     = len(items)
-		processed int
+		totalFed  atomic.Int64
 	)
 
+	// Periodic manifest saver — batches disk writes instead of saving on every update
+	dirty := &atomic.Bool{}
+	saveCtx, saveCancel := context.WithCancel(context.Background())
+	saveDone := make(chan struct{})
+	go func() {
+		defer close(saveDone)
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if dirty.CompareAndSwap(true, false) {
+					mu.Lock()
+					session.SaveManifest(sessionDir, manifest)
+					mu.Unlock()
+				}
+			case <-saveCtx.Done():
+				mu.Lock()
+				session.SaveManifest(sessionDir, manifest)
+				mu.Unlock()
+				return
+			}
+		}
+	}()
+	markDirty := func() { dirty.Store(true) }
+
+	// Work channel — buffered so discovery can feed without blocking
+	workCh := make(chan workItem, 200)
+
+	// Start worker pool — workers persist across discovery rounds
 	wg.Add(workers)
 	for w := 0; w < workers; w++ {
 		go func() {
 			defer wg.Done()
-			for item := range work {
+			for item := range workCh {
 				if ctx.Err() != nil {
 					return
 				}
@@ -425,7 +301,7 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 				// Early stop: enough threads extracted
 				mu.Lock()
 				counts := session.CountByStatus(manifest)
-				enough := counts["extracted"] >= config.Limit
+				enough := counts["extracted"]+counts["ranked"] >= config.Limit
 				mu.Unlock()
 				if enough {
 					return
@@ -433,6 +309,7 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 
 				ts := item.state
 				n := done.Add(1)
+				total := totalFed.Load()
 
 				// Step 1: Evaluate if needed
 				if item.needsEval {
@@ -441,8 +318,8 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 						if err != nil {
 							mu.Lock()
 							session.UpdateThreadStatus(manifest, ts.PostID, "failed")
-							session.SaveManifest(sessionDir, manifest)
 							mu.Unlock()
+							markDirty()
 							fmt.Printf("  [%d/%d] %s → eval failed: %v\n", n, total, truncate(ts.Title, 50), err)
 							continue
 						}
@@ -450,8 +327,8 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 						if evalResult.Verdict != "keep" {
 							mu.Lock()
 							session.UpdateThreadStatus(manifest, ts.PostID, "skipped")
-							session.SaveManifest(sessionDir, manifest)
 							mu.Unlock()
+							markDirty()
 							fmt.Printf("  [%d/%d] %s → SKIP: %s\n", n, total, truncate(ts.Title, 50), evalResult.Reason)
 							continue
 						}
@@ -464,34 +341,35 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 							manifest.Threads[idx].Status = "collected"
 							manifest.Threads[idx].CollectedAt = &now
 						}
-						session.SaveManifest(sessionDir, manifest)
 						mu.Unlock()
+						markDirty()
 					} else {
 						// No evaluator: fetch thread directly
 						thread, err := o.searcher.GetThread(ctx, ts.Permalink, 100)
 						if err != nil {
 							mu.Lock()
 							session.UpdateThreadStatus(manifest, ts.PostID, "failed")
-							session.SaveManifest(sessionDir, manifest)
 							mu.Unlock()
+							markDirty()
 							fmt.Printf("  [%d/%d] %s → fetch failed: %v\n", n, total, truncate(ts.Title, 50), err)
 							continue
 						}
 
+						// Write thread JSON OUTSIDE the lock
 						threadPath := filepath.Join(sessionDir, fmt.Sprintf("thread_%s.json", ts.PostID))
 						threadData, err := json.MarshalIndent(thread, "", "  ")
 						if err != nil {
 							mu.Lock()
 							session.UpdateThreadStatus(manifest, ts.PostID, "failed")
-							session.SaveManifest(sessionDir, manifest)
 							mu.Unlock()
+							markDirty()
 							continue
 						}
 						if err := os.WriteFile(threadPath, threadData, 0644); err != nil {
 							mu.Lock()
 							session.UpdateThreadStatus(manifest, ts.PostID, "failed")
-							session.SaveManifest(sessionDir, manifest)
 							mu.Unlock()
+							markDirty()
 							continue
 						}
 
@@ -502,8 +380,8 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 							manifest.Threads[idx].Status = "collected"
 							manifest.Threads[idx].CollectedAt = &now
 						}
-						session.SaveManifest(sessionDir, manifest)
 						mu.Unlock()
+						markDirty()
 					}
 				}
 
@@ -513,8 +391,8 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 				if err != nil {
 					mu.Lock()
 					session.UpdateThreadStatus(manifest, ts.PostID, "failed")
-					session.SaveManifest(sessionDir, manifest)
 					mu.Unlock()
+					markDirty()
 					fmt.Printf("  [%d/%d] %s → thread file missing: %v\n", n, total, truncate(ts.Title, 50), err)
 					continue
 				}
@@ -523,8 +401,8 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 				if err := json.Unmarshal(threadData, &thread); err != nil {
 					mu.Lock()
 					session.UpdateThreadStatus(manifest, ts.PostID, "failed")
-					session.SaveManifest(sessionDir, manifest)
 					mu.Unlock()
+					markDirty()
 					continue
 				}
 
@@ -536,8 +414,8 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 						manifest.Threads[idx].Status = "failed"
 						manifest.Threads[idx].Error = err.Error()
 					}
-					session.SaveManifest(sessionDir, manifest)
 					mu.Unlock()
+					markDirty()
 					fmt.Printf("  [%d/%d] %s → extract failed: %v\n", n, total, truncate(ts.Title, 50), err)
 					continue
 				}
@@ -547,19 +425,323 @@ func (o *DefaultOrchestrator) evaluateAndExtract(ctx context.Context, config Run
 				mu.Lock()
 				session.UpdateThreadEntries(manifest, ts.PostID, result.Entries)
 				processed++
-				session.SaveManifest(sessionDir, manifest)
 				mu.Unlock()
+				markDirty()
 
 				fmt.Printf("  [%d extracted] %s (%d entries)\n", e, truncate(ts.Title, 50), len(result.Entries))
 			}
 		}()
 	}
 
+	// Track which threads have been fed to the work channel
+	fed := make(map[string]bool)
+
+	// Feed already-collected threads (resume case)
+	mu.Lock()
+	collected := session.GetCollectedThreads(manifest)
+	mu.Unlock()
+	for _, ts := range collected {
+		fed[ts.PostID] = true
+		totalFed.Add(1)
+		workCh <- workItem{ts, false}
+	}
+
+	// Discovery + feed loop — runs discovery and feeds workers across multiple rounds
+	const maxRounds = 3
+	for round := 0; round < maxRounds; round++ {
+		if ctx.Err() != nil {
+			break
+		}
+
+		// Check if we already have enough extracted threads
+		mu.Lock()
+		counts := session.CountByStatus(manifest)
+		haveEnough := counts["extracted"]+counts["ranked"] >= config.Limit
+		mu.Unlock()
+		if haveEnough {
+			fmt.Printf("Already have %d extracted threads (target: %d)\n", counts["extracted"]+counts["ranked"], config.Limit)
+			break
+		}
+
+		if round > 0 {
+			fmt.Printf("\n=== Retry round %d: need more threads (have %d extracted, need %d) ===\n",
+				round+1, counts["extracted"]+counts["ranked"], config.Limit)
+		}
+
+		// Phase 1: Discover threads
+		fmt.Println("\n=== Phase 1: Thread Discovery ===")
+		discoveryStart := time.Now()
+
+		mu.Lock()
+		counts = session.CountByStatus(manifest)
+		actionable := counts["pending"] + counts["collected"] + counts["extracted"] + counts["ranked"]
+		mu.Unlock()
+		overprovisionTarget := config.Limit * 3
+		remaining := overprovisionTarget - actionable
+
+		if remaining <= 0 {
+			fmt.Printf("Already have %d actionable threads (target: %d), skipping discovery\n", actionable, overprovisionTarget)
+		} else {
+			posts, err := o.findThreads(ctx, config, remaining, sessionDir)
+			if err != nil {
+				if ctx.Err() != nil {
+					break
+				}
+				if round == 0 {
+					close(workCh)
+					wg.Wait()
+					saveCancel()
+					<-saveDone
+					return 0, fmt.Errorf("discovery: %w", err)
+				}
+				fmt.Printf("  Warning: discovery failed: %v\n", err)
+				break
+			}
+
+			// Add discovered posts to manifest under lock
+			mu.Lock()
+			added := 0
+			for _, post := range posts {
+				if added >= remaining {
+					break
+				}
+				if session.FindThread(manifest, post.ID) != nil {
+					continue
+				}
+				thread := types.ThreadState{
+					PostID:      post.ID,
+					Permalink:   post.Permalink,
+					Title:       post.Title,
+					Subreddit:   post.Subreddit,
+					Score:       post.Score,
+					NumComments: post.NumComments,
+					Status:      "pending",
+				}
+				session.AddThread(manifest, thread)
+				added++
+			}
+			mu.Unlock()
+			markDirty()
+			fmt.Printf("Added %d new threads to session\n", added)
+		}
+		fmt.Printf("  Discovery completed in %s\n", formatDuration(time.Since(discoveryStart)))
+
+		// Feed newly pending threads to workers
+		mu.Lock()
+		var newItems []workItem
+		for _, ts := range manifest.Threads {
+			if ts.Status == "pending" && !fed[ts.PostID] {
+				newItems = append(newItems, workItem{ts, true})
+				fed[ts.PostID] = true
+			}
+		}
+		mu.Unlock()
+
+		if len(newItems) == 0 && round > 0 {
+			fmt.Println("No new threads to process, stopping")
+			break
+		}
+
+		fmt.Println("\n=== Phase 2+3: Evaluate & Extract ===")
+		fmt.Printf("Feeding %d threads to %d workers\n", len(newItems), workers)
+		evalExtractStart := time.Now()
+		totalFed.Add(int64(len(newItems)))
+		for _, item := range newItems {
+			if ctx.Err() != nil {
+				break
+			}
+			workCh <- item
+		}
+
+		// Wait for this round's items to be consumed before deciding on next round
+		roundTarget := totalFed.Load()
+		for {
+			if ctx.Err() != nil {
+				break
+			}
+			if done.Load() >= roundTarget {
+				break
+			}
+			mu.Lock()
+			counts = session.CountByStatus(manifest)
+			haveEnough = counts["extracted"]+counts["ranked"] >= config.Limit
+			mu.Unlock()
+			if haveEnough {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		fmt.Printf("  Evaluate & Extract completed in %s (%d extracted)\n",
+			formatDuration(time.Since(evalExtractStart)), extracted.Load())
+	}
+
+	close(workCh)
 	wg.Wait()
 
-	fmt.Printf("Extraction log: %s\n", logPath)
+	// Final manifest save
+	saveCancel()
+	<-saveDone
 
+	fmt.Printf("Extraction log: %s\n", logPath)
 	return processed, nil
+}
+
+// findThreads discovers threads using the agentic discoverer or direct search.
+// Returns posts without modifying the manifest — the caller handles that under lock.
+func (o *DefaultOrchestrator) findThreads(ctx context.Context, config RunConfig, remaining int, sessionDir string) ([]types.Post, error) {
+	if o.threadDiscoverer != nil {
+		fmt.Printf("Agent discovering %d threads across %v\n", remaining, config.Subreddits)
+
+		if err := os.MkdirAll(sessionDir, 0755); err != nil {
+			return nil, fmt.Errorf("creating session dir: %w", err)
+		}
+
+		posts, err := o.threadDiscoverer.DiscoverThreads(ctx, config.Form, config.Query, config.Subreddits, remaining, sessionDir)
+		if err != nil {
+			fmt.Printf("  Warning: agentic discovery failed: %v\n", err)
+			fmt.Println("  Falling back to direct search")
+			return o.searchDirect(ctx, config, remaining)
+		}
+		return posts, nil
+	}
+
+	return o.searchDirect(ctx, config, remaining)
+}
+
+// searchDirect performs parallel API searches across subreddits
+func (o *DefaultOrchestrator) searchDirect(ctx context.Context, config RunConfig, remaining int) ([]types.Post, error) {
+	if config.Query != "" {
+		if len(config.Subreddits) == 0 {
+			fmt.Printf("Searching all of Reddit for: %s\n", config.Query)
+			posts, err := o.searcher.Search(ctx, config.Query, "all", remaining)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Printf("  Found %d posts\n", len(posts))
+			return posts, nil
+		}
+
+		// Parallel search across subreddits
+		var (
+			posts []types.Post
+			mu    sync.Mutex
+			wg    sync.WaitGroup
+		)
+		for _, sub := range config.Subreddits {
+			wg.Add(1)
+			go func(sub string) {
+				defer wg.Done()
+				if ctx.Err() != nil {
+					return
+				}
+				fmt.Printf("Searching r/%s for: %s\n", sub, config.Query)
+				subPosts, err := o.searcher.Search(ctx, config.Query, sub, remaining)
+				if err != nil {
+					fmt.Printf("  Warning: search failed for r/%s: %v\n", sub, err)
+					return
+				}
+				mu.Lock()
+				posts = append(posts, subPosts...)
+				mu.Unlock()
+				fmt.Printf("  Found %d posts in r/%s\n", len(subPosts), sub)
+			}(sub)
+		}
+		wg.Wait()
+		return posts, nil
+	}
+
+	// List mode — parallel across subreddits
+	var (
+		posts []types.Post
+		mu    sync.Mutex
+		wg    sync.WaitGroup
+	)
+	for _, sub := range config.Subreddits {
+		wg.Add(1)
+		go func(sub string) {
+			defer wg.Done()
+			if ctx.Err() != nil {
+				return
+			}
+			fmt.Printf("Listing r/%s (%s)\n", sub, config.Sort)
+			subPosts, err := o.searcher.ListSubreddit(ctx, sub, config.Sort, remaining)
+			if err != nil {
+				fmt.Printf("  Warning: list failed for r/%s: %v\n", sub, err)
+				return
+			}
+			mu.Lock()
+			posts = append(posts, subPosts...)
+			mu.Unlock()
+			fmt.Printf("  Found %d posts in r/%s\n", len(subPosts), sub)
+		}(sub)
+	}
+	wg.Wait()
+	return posts, nil
+}
+
+// rankEntries collects all extracted entries and runs them through the ranker
+func (o *DefaultOrchestrator) rankEntries(ctx context.Context, config RunConfig, manifest *types.Manifest, sessionDir string) (int, error) {
+	// Collect entries from all extracted threads
+	var inputs []agent.RankInput
+	for _, ts := range manifest.Threads {
+		if ts.Status != "extracted" || len(ts.Entries) == 0 {
+			continue
+		}
+		for j, entry := range ts.Entries {
+			inputs = append(inputs, agent.RankInput{
+				ThreadPostID: ts.PostID,
+				EntryIndex:   j,
+				Entry:        entry,
+				ThreadScore:  ts.Score,
+				NumComments:  ts.NumComments,
+			})
+		}
+	}
+
+	if len(inputs) == 0 {
+		fmt.Println("  No entries to rank")
+		return 0, nil
+	}
+
+	fmt.Printf("  Ranking %d entries from %d threads\n", len(inputs), len(session.GetExtractedThreads(manifest)))
+
+	outputs, err := o.ranker.RankEntries(ctx, config.Form, inputs)
+	if err != nil {
+		return 0, err
+	}
+
+	// Write scores back to entries in the manifest
+	for _, out := range outputs {
+		idx := session.FindThreadIndex(manifest, out.ThreadPostID)
+		if idx < 0 {
+			continue
+		}
+		thread := &manifest.Threads[idx]
+		if out.EntryIndex < 0 || out.EntryIndex >= len(thread.Entries) {
+			continue
+		}
+		score := out.FinalScore
+		thread.Entries[out.EntryIndex].RankScore = &score
+		if len(out.Flags) > 0 {
+			thread.Entries[out.EntryIndex].RankFlags = out.Flags
+		}
+		if out.Reason != "" {
+			thread.Entries[out.EntryIndex].RankReason = out.Reason
+		}
+	}
+
+	// Update thread statuses to "ranked"
+	for _, ts := range manifest.Threads {
+		if ts.Status == "extracted" && len(ts.Entries) > 0 {
+			session.UpdateThreadRanked(manifest, ts.PostID)
+		}
+	}
+
+	if err := session.SaveManifest(sessionDir, manifest); err != nil {
+		return 0, fmt.Errorf("saving manifest after ranking: %w", err)
+	}
+
+	return len(outputs), nil
 }
 
 func truncate(s string, n int) string {
@@ -567,4 +749,17 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n-3] + "..."
+}
+
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Millisecond)
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	m := int(d.Minutes())
+	s := int(d.Seconds()) % 60
+	return fmt.Sprintf("%dm%02ds", m, s)
 }
