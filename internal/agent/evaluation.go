@@ -18,11 +18,12 @@ type ClaudeEvaluator struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
+	logger  claude.EventHandler
 }
 
 // NewClaudeEvaluator creates a new Claude-based thread evaluator
-func NewClaudeEvaluator(runner Runner, prompts fs.FS, model string) *ClaudeEvaluator {
-	return &ClaudeEvaluator{runner: runner, prompts: prompts, model: model}
+func NewClaudeEvaluator(runner Runner, prompts fs.FS, model string, logger claude.EventHandler) *ClaudeEvaluator {
+	return &ClaudeEvaluator{runner: runner, prompts: prompts, model: model, logger: logger}
 }
 
 // evalFileResult is the JSON structure the agent writes to the eval output file
@@ -49,7 +50,7 @@ func (e *ClaudeEvaluator) EvaluateThread(ctx context.Context, form *types.Form, 
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	_, err = e.runner.Run(ctx, prompt,
+	opts := []claude.RunOption{
 		claude.WithAllowedTools(
 			fmt.Sprintf("Bash(%s *)", executable),
 			fmt.Sprintf("Bash(* > %s)", threadPath),
@@ -57,7 +58,11 @@ func (e *ClaudeEvaluator) EvaluateThread(ctx context.Context, form *types.Form, 
 		),
 		claude.WithMaxTurns(10),
 		claude.WithModel(e.model),
-	)
+	}
+	if e.logger != nil {
+		opts = append(opts, claude.WithEventHandler(e.logger))
+	}
+	_, err = e.runner.Run(ctx, prompt, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("calling claude: %w", err)
 	}

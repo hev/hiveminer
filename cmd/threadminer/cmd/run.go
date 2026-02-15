@@ -83,17 +83,25 @@ func cmdRun(args []string) error {
 	}()
 
 	// Create shared Claude client and prompt filesystem
+	agentLogger := func(name, model string) claude.EventHandler {
+		return claude.NewLogger(os.Stderr,
+			claude.LogTokens(true),
+			claude.LogResult(false),
+			claude.WithAgentName(name),
+			claude.WithModelName(model),
+		)
+	}
 	client := claude.NewClient()
 	prompts := os.DirFS("prompts")
 
 	// Create orchestrator with agentic phases
 	searcher := search.NewRedditSearcher()
 	orch := orchestrator.New(searcher)
-	orch.SetDiscoverer(agent.NewClaudeDiscoverer(client, prompts, *discoveryModel))
-	orch.SetThreadDiscoverer(agent.NewClaudeThreadDiscoverer(client, prompts, *discoveryModel))
-	orch.SetThreadEvaluator(agent.NewClaudeEvaluator(client, prompts, *evalModel))
-	orch.SetExtractor(agent.NewClaudeExtractor(client, prompts, *extractModel))
-	orch.SetRanker(agent.NewClaudeRanker(client, prompts, *rankModel))
+	orch.SetDiscoverer(agent.NewClaudeDiscoverer(client, prompts, *discoveryModel, agentLogger("discovery", *discoveryModel)))
+	orch.SetThreadDiscoverer(agent.NewClaudeThreadDiscoverer(client, prompts, *discoveryModel, agentLogger("threads", *discoveryModel)))
+	orch.SetThreadEvaluator(agent.NewClaudeEvaluator(client, prompts, *evalModel, agentLogger("eval", *evalModel)))
+	orch.SetExtractor(agent.NewClaudeExtractor(client, prompts, *extractModel, agentLogger("extract", *extractModel)))
+	orch.SetRanker(agent.NewClaudeRanker(client, prompts, *rankModel, agentLogger("rank", *rankModel)))
 
 	// Run extraction
 	config := orchestrator.RunConfig{

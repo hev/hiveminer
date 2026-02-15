@@ -17,11 +17,12 @@ type ClaudeDiscoverer struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
+	logger  claude.EventHandler
 }
 
 // NewClaudeDiscoverer creates a new Claude-based subreddit discoverer
-func NewClaudeDiscoverer(runner Runner, prompts fs.FS, model string) *ClaudeDiscoverer {
-	return &ClaudeDiscoverer{runner: runner, prompts: prompts, model: model}
+func NewClaudeDiscoverer(runner Runner, prompts fs.FS, model string, logger claude.EventHandler) *ClaudeDiscoverer {
+	return &ClaudeDiscoverer{runner: runner, prompts: prompts, model: model, logger: logger}
 }
 
 type discoveryResponse struct {
@@ -43,11 +44,15 @@ func (d *ClaudeDiscoverer) DiscoverSubreddits(ctx context.Context, form *types.F
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	result, err := d.runner.Run(ctx, prompt,
+	opts := []claude.RunOption{
 		claude.WithAllowedTools(fmt.Sprintf("Bash(%s *)", executable)),
 		claude.WithMaxTurns(15),
 		claude.WithModel(d.model),
-	)
+	}
+	if d.logger != nil {
+		opts = append(opts, claude.WithEventHandler(d.logger))
+	}
+	result, err := d.runner.Run(ctx, prompt, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("calling claude: %w", err)
 	}

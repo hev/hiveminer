@@ -21,14 +21,16 @@ type ClaudeRanker struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
+	logger  claude.EventHandler
 }
 
 // NewClaudeRanker creates a new ranker
-func NewClaudeRanker(runner Runner, prompts fs.FS, model string) *ClaudeRanker {
+func NewClaudeRanker(runner Runner, prompts fs.FS, model string, logger claude.EventHandler) *ClaudeRanker {
 	return &ClaudeRanker{
 		runner:  runner,
 		prompts: prompts,
 		model:   model,
+		logger:  logger,
 	}
 }
 
@@ -439,7 +441,11 @@ func (r *ClaudeRanker) AssessWithClaude(ctx context.Context, form *types.Form, i
 	}
 
 	// Call Claude
-	result, err := r.runner.Run(ctx, prompt, claude.WithModel(r.model))
+	opts := []claude.RunOption{claude.WithModel(r.model)}
+	if r.logger != nil {
+		opts = append(opts, claude.WithEventHandler(r.logger))
+	}
+	result, err := r.runner.Run(ctx, prompt, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("calling claude: %w", err)
 	}

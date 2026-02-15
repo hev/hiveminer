@@ -16,14 +16,16 @@ type ClaudeExtractor struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
+	logger  claude.EventHandler
 }
 
 // NewClaudeExtractor creates a new Claude CLI extractor
-func NewClaudeExtractor(runner Runner, prompts fs.FS, model string) *ClaudeExtractor {
+func NewClaudeExtractor(runner Runner, prompts fs.FS, model string, logger claude.EventHandler) *ClaudeExtractor {
 	return &ClaudeExtractor{
 		runner:  runner,
 		prompts: prompts,
 		model:   model,
+		logger:  logger,
 	}
 }
 
@@ -42,7 +44,13 @@ func (c *ClaudeExtractor) ExtractFieldsWithOutput(ctx context.Context, thread *t
 	}
 
 	// Build run options
-	opts := []claude.RunOption{claude.WithModel(c.model)}
+	opts := []claude.RunOption{
+		claude.WithModel(c.model),
+		claude.WithMaxOutputTokens(64000),
+	}
+	if c.logger != nil {
+		opts = append(opts, claude.WithEventHandler(c.logger))
+	}
 	if output != nil {
 		opts = append(opts, claude.WithOutputStream(output))
 	}

@@ -20,11 +20,12 @@ type ClaudeThreadDiscoverer struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
+	logger  claude.EventHandler
 }
 
 // NewClaudeThreadDiscoverer creates a new Claude-based thread discoverer
-func NewClaudeThreadDiscoverer(runner Runner, prompts fs.FS, model string) *ClaudeThreadDiscoverer {
-	return &ClaudeThreadDiscoverer{runner: runner, prompts: prompts, model: model}
+func NewClaudeThreadDiscoverer(runner Runner, prompts fs.FS, model string, logger claude.EventHandler) *ClaudeThreadDiscoverer {
+	return &ClaudeThreadDiscoverer{runner: runner, prompts: prompts, model: model, logger: logger}
 }
 
 // discoveryResult is the JSON structure the agent writes to the output file
@@ -59,14 +60,18 @@ func (d *ClaudeThreadDiscoverer) DiscoverThreads(ctx context.Context, form *type
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	_, err = d.runner.Run(ctx, prompt,
+	opts := []claude.RunOption{
 		claude.WithAllowedTools(
 			fmt.Sprintf("Bash(%s *)", executable),
 			fmt.Sprintf("Write(%s/*)", sessionDir),
 		),
 		claude.WithMaxTurns(25),
 		claude.WithModel(d.model),
-	)
+	}
+	if d.logger != nil {
+		opts = append(opts, claude.WithEventHandler(d.logger))
+	}
+	_, err = d.runner.Run(ctx, prompt, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("calling claude: %w", err)
 	}
