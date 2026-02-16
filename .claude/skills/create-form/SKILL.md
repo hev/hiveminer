@@ -1,126 +1,98 @@
-# Create Form Skill
+---
+name: create-form
+description: Create threadminer extraction forms interactively. Use when the user wants to research, find, compare, or rank something on Reddit using threadminer. Triggers on phrases like "find the best X", "research Y on Reddit", "compare Z", or "create a form for".
+argument-hint: "[topic]"
+---
 
-Creates extraction forms for threadminer through interactive questions.
+# Interactive Form Builder
 
-## Usage
+You are helping the user design a threadminer extraction form. Threadminer mines Reddit threads to extract and compare structured data — the form defines *what* to extract.
+
+Your job is to have a **conversation** to understand what the user cares about, then generate a form. Don't ask the user to list fields — ask about their goals and preferences, then translate those into fields yourself.
+
+## If arguments were provided
+
+The user's topic is: $ARGUMENTS
+
+Skip asking what they want to research. Go straight to unpacking their criteria.
+
+## Step 1: Understand the Goal
+
+If no topic was provided, ask what they want to find or research on Reddit.
+
+Listen for the **subject** (pokemon, laptops, cities) and the **intent** (ranking, comparison, decision-making, recommendation).
+
+## Step 2: Unpack the Criteria
+
+This is the core step. The user said "best" or "recommended" — but what does that mean to them?
+
+Use `AskUserQuestion` with `multiSelect: true` to explore what dimensions matter. Generate 3-4 options based on what typically matters for the subject.
+
+Example for "best pokemon":
+- Competitive viability (tier ranking, win rate, meta relevance)
+- Design & aesthetics (looks, shiny forms, fan favorites)
+- In-game usability (story mode, ease of obtaining, versatility)
+- Nostalgia & community sentiment (beloved by fans, iconic status)
+
+**Then drill deeper** on what they selected with follow-up questions. Keep using `AskUserQuestion` — multi-select options are faster than open-ended text.
+
+## Step 3: Determine the Primary Entity
+
+Every form needs a `required: true` field that identifies the primary thing being extracted. If it's not obvious from context, ask using `AskUserQuestion`:
+
+"What's the main thing you want to extract — one entry per ___?"
+
+## Step 4: Propose Fields
+
+Based on the conversation, propose 5-9 fields as a readable table:
+
+| Field | Type | What it captures |
+|-------|------|-----------------|
+| **pokemon_name** | string | Which pokemon (required) |
+| **tier** | string | Competitive tier |
+| **strengths** | array | What makes it good |
+| ... | ... | ... |
+
+Ask: "Want to add, remove, or change anything?"
+
+Let the user iterate until they're happy.
+
+## Step 5: Generate and Save
+
+Generate the form JSON and save to `forms/<slug>.json`.
+
+### Form JSON rules
+
+- **title**: Short noun phrase (e.g., "Competitive Pokemon", not "Best Pokemon Research Form")
+- **description**: One sentence on what's being extracted and compared
+- **search_hints**: 4-6 Reddit search terms using casual language and common phrasings
+- **fields**: Each field needs:
+  - `id`: snake_case identifier
+  - `type`: `string`, `number`, `boolean`, or `array`
+  - `question`: Specific extraction prompt telling Claude what to look for in thread comments
+  - `search_hints` (optional): Keywords that help find relevant comments
+  - `required: true` on the primary identifier field only
+  - `internal: true` on metadata fields hidden from display (like `mention_count`)
+- Use `array` for lists (pros, cons, features). Use `string` for summaries or specific values. Use `number` only for truly numeric data.
+
+### Reference: existing form examples
+
+See `forms/android-phones.json` and `forms/family-vacation.json` for the expected format. Read these if you need to check the structure.
+
+## Step 6: Suggest a Run Command
+
+After saving, suggest how to run it:
+
 ```
-/create-form
-```
-
-## Behavior
-
-When invoked, guide the user through creating a form by asking:
-
-1. **What are you trying to find or research on Reddit?**
-   - This becomes the form title and description
-   - Example: "Gift recommendations for 45 year old men"
-
-2. **What specific information do you want to extract from threads?**
-   - Ask for a list of information they want
-   - Example: "product name, price, positive reviews, negative reviews, purchase links"
-
-3. **For each piece of information, determine:**
-   - Field ID (snake_case identifier)
-   - Field type:
-     - `string` for text values
-     - `number` for numeric values
-     - `boolean` for yes/no questions
-     - `array` for lists of items
-   - Question (what to ask Claude to extract)
-   - Search hints (keywords that help find relevant content)
-
-4. **Generate the form JSON and save to `forms/` directory**
-
-## Output Format
-
-Generate a form like this:
-
-```json
-{
-  "title": "Form Title",
-  "description": "What this form extracts",
-  "search_hints": ["relevant", "keywords"],
-  "fields": [
-    {
-      "id": "field_name",
-      "type": "string",
-      "question": "What specific question should be answered?",
-      "required": true
-    },
-    {
-      "id": "another_field",
-      "type": "array",
-      "question": "What list of items should be extracted?",
-      "search_hints": ["keywords", "to", "find"]
-    }
-  ]
-}
-```
-
-## Field Types
-
-- **string**: Single text value (product name, price range, URL)
-- **number**: Numeric value (rating, price in dollars, count)
-- **boolean**: True/false (is recommended?, has issues?)
-- **array**: List of items (positive comments, features, links)
-
-## Example Session
-
-User: `/create-form`
-
-Claude: I'll help you create an extraction form. What are you trying to find or research on Reddit?
-
-User: Best mechanical keyboards for programming
-
-Claude: Great! What specific information do you want to extract from threads about mechanical keyboards?
-
-User: keyboard name, price, switch type, good things people say, bad things people say
-
-Claude: I'll create a form with those fields. Let me generate it...
-
-*Creates forms/mechanical-keyboards.json*
-
-```json
-{
-  "title": "Mechanical Keyboard Recommendations",
-  "description": "Extract keyboard recommendations for programming from Reddit threads",
-  "search_hints": ["mechanical keyboard", "programming", "typing", "switch"],
-  "fields": [
-    {
-      "id": "keyboard_name",
-      "type": "string",
-      "question": "What keyboard model is being recommended?",
-      "required": true
-    },
-    {
-      "id": "price",
-      "type": "string",
-      "question": "What is the price or price range mentioned?"
-    },
-    {
-      "id": "switch_type",
-      "type": "string",
-      "question": "What switch type is mentioned (Cherry MX, Gateron, etc.)?"
-    },
-    {
-      "id": "positive_feedback",
-      "type": "array",
-      "question": "What positive things do people say about this keyboard?",
-      "search_hints": ["love", "great", "recommend", "best", "amazing"]
-    },
-    {
-      "id": "negative_feedback",
-      "type": "array",
-      "question": "What negative things or concerns do people mention?",
-      "search_hints": ["but", "however", "issue", "problem", "wish"]
-    }
-  ]
-}
+threadminer run --form forms/<slug>.json
 ```
 
-Form saved to `forms/mechanical-keyboards.json`
+If the conversation revealed specific subreddits or search terms, include those with `-q` and `-r` flags.
 
-You can now run:
-```
-threadminer run --form forms/mechanical-keyboards.json -q "best mechanical keyboard programming" -r MechanicalKeyboards --limit 10
-```
+## Key Principles
+
+- **Don't ask the user to list fields.** Ask about goals, translate into fields yourself.
+- **Use `AskUserQuestion` liberally.** Multi-select options are faster than open-ended text.
+- **Be opinionated.** Propose a reasonable default, let the user adjust.
+- **Think about what Reddit has.** Focus on opinions, experiences, comparisons — not official specs or stats.
+- **Keep it conversational.** Planning with a friend, not filling out a form about forms.

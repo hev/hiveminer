@@ -118,7 +118,8 @@ func cmdRunsLs(args []string) error {
 	fmt.Printf("\n%s%s Runs %s\n", colorBold, colorCyan, colorReset)
 	fmt.Println(strings.Repeat("─", 80))
 
-	for i, s := range sessions {
+	for idx := len(sessions) - 1; idx >= 0; idx-- {
+		s := sessions[idx]
 		m := s.Manifest
 		counts := session.CountByStatus(m)
 
@@ -140,7 +141,7 @@ func cmdRunsLs(args []string) error {
 			}
 		}
 
-		fmt.Printf("\n %s%s#%d%s  %s%s%s\n", colorBold, colorDim, i+1, colorReset, colorBold, s.Name, colorReset)
+		fmt.Printf("\n %s%s#%d%s  %s%s%s\n", colorBold, colorDim, idx+1, colorReset, colorBold, s.Name, colorReset)
 		fmt.Printf("     %sForm:%s  %s\n", colorCyan, colorReset, m.Form.Title)
 		if m.Query != "" {
 			fmt.Printf("     %sQuery:%s %s\n", colorCyan, colorReset, m.Query)
@@ -306,8 +307,10 @@ func cmdRunsShow(args []string) error {
 		truncated = true
 	}
 
-	// Display each entry as a card
-	for entryNum, re := range allEntries {
+	// Display entries in reverse so #1 appears at the bottom (closest to prompt)
+	for i := len(allEntries) - 1; i >= 0; i-- {
+		re := allEntries[i]
+		entryNum := i
 		entry := re.entry
 		thread := re.thread
 

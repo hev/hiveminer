@@ -1,0 +1,67 @@
+{
+  "title": "Alpine Christmas Markets with Skiing",
+  "description": "Extract and compare German-speaking Alpine towns that combine traditional Christmas markets with nearby alpine and nordic skiing",
+  "search_hints": [
+    "christmas market skiing alps",
+    "weihnachtsmarkt ski resort",
+    "best christmas market austria skiing",
+    "christmas market near ski area",
+    "advent market alpine town",
+    "christkindlmarkt ski holiday"
+  ],
+  "fields": [
+    {
+      "id": "destination",
+      "type": "string",
+      "question": "What town or city is being recommended as a Christmas market destination with skiing access?",
+      "required": true
+    },
+    {
+      "id": "region",
+      "type": "string",
+      "question": "What region and country is this destination in? (e.g., Tyrol/Austria, Bavaria/Germany, Graubünden/Switzerland, South Tyrol/Italy)"
+    },
+    {
+      "id": "christmas_markets",
+      "type": "array",
+      "question": "What specific Christmas markets are mentioned in this town? Include names and what makes each one notable.",
+      "search_hints": ["Christkindlmarkt", "Weihnachtsmarkt", "advent market", "christmas market", "old town market", "medieval market"]
+    },
+    {
+      "id": "market_highlights",
+      "type": "array",
+      "question": "What specific food, drinks, crafts, or traditions do people rave about at these markets?",
+      "search_hints": ["Glühwein", "Bratwurst", "Raclette", "Lebkuchen", "handmade", "crafts", "mulled wine", "local food", "Punsch", "Käsespätzle"]
+    },
+    {
+      "id": "atmosphere_notes",
+      "type": "string",
+      "question": "How do people describe the atmosphere and setting? Look for comments about scenery, mountain backdrop, charm, coziness, crowd levels, and whether it feels authentic or touristy.",
+      "search_hints": ["charming", "cozy", "magical", "scenic", "crowded", "touristy", "authentic", "traditional", "fairy tale", "backdrop", "old town"]
+    },
+    {
+      "id": "alpine_skiing",
+      "type": "string",
+      "question": "What nearby alpine ski resorts or areas are mentioned? Note terrain quality, vertical, snow reliability, and lift infrastructure.",
+      "search_hints": ["ski resort", "piste", "gondola", "lift", "vertical", "snow", "glacier", "ski area", "runs", "off-piste"]
+    },
+    {
+      "id": "nordic_skiing",
+      "type": "string",
+      "question": "What cross-country or Nordic skiing options are mentioned nearby? Note trail networks, grooming quality, scenic routes, and whether classic and skating styles are available.",
+      "search_hints": ["cross country", "XC", "Nordic", "langlauf", "loipe", "groomed trails", "skating", "classic", "biathlon"]
+    },
+    {
+      "id": "ski_to_market_proximity",
+      "type": "string",
+      "question": "How close is the skiing to the Christmas market? Is it walkable, a short bus ride, or a longer drive? Note any specific logistics mentioned.",
+      "search_hints": ["walking distance", "bus", "drive", "minutes", "shuttle", "close", "nearby", "town center"]
+    },
+    {
+      "id": "mention_count",
+      "type": "number",
+      "question": "How many separate commenters recommended this destination?",
+      "internal": true
+    }
+  ]
+}

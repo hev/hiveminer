@@ -45,6 +45,7 @@ For each entry, extract every field listed above. For each field provide:
 - **array**: Extract multiple values as a JSON array
 
 ### Entry Guidelines
+- Extract at most **20 entries** per thread, prioritizing those with the most discussion and highest confidence
 - Only include entries where there is meaningful information (at least the primary/required field has a value)
 - If a commenter mentions a place/item only in passing without detail, you may still include it but with lower confidence
 - Entries with more discussion and supporting comments should have higher confidence

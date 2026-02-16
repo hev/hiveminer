@@ -1,0 +1,61 @@
+{
+  "title": "Competitive Pokemon",
+  "description": "Extract and compare pokemon recommendations for Smogon singles from Reddit discussions",
+  "search_hints": ["best pokemon smogon", "OU tier list", "pokemon competitive singles", "best pokemon ranked", "smogon viability", "pokemon tier ranking"],
+  "fields": [
+    {
+      "id": "pokemon_name",
+      "type": "string",
+      "question": "What specific pokemon is being recommended or discussed?",
+      "required": true
+    },
+    {
+      "id": "tier",
+      "type": "string",
+      "question": "What Smogon tier is this pokemon placed in or discussed for (OU, UU, RU, NU, Ubers, etc.)?",
+      "search_hints": ["OU", "UU", "RU", "NU", "Ubers", "tier", "banned", "dropped"]
+    },
+    {
+      "id": "role",
+      "type": "string",
+      "question": "What competitive role does this pokemon fill (sweeper, wall, pivot, hazard setter, revenge killer, wallbreaker, etc.)?",
+      "search_hints": ["sweeper", "wall", "pivot", "setter", "breaker", "tank", "support", "lead"]
+    },
+    {
+      "id": "key_moves",
+      "type": "array",
+      "question": "What moves do people recommend or mention as important for this pokemon?",
+      "search_hints": ["moveset", "run", "set", "coverage", "STAB", "move"]
+    },
+    {
+      "id": "best_sets",
+      "type": "string",
+      "question": "What EV spreads, natures, abilities, or held items do people recommend?",
+      "search_hints": ["EVs", "nature", "item", "ability", "set", "spread", "build", "jolly", "timid", "choice", "leftovers"]
+    },
+    {
+      "id": "strengths",
+      "type": "array",
+      "question": "What makes this pokemon good? What does it beat, wall, or threaten?",
+      "search_hints": ["beats", "walls", "threatens", "strong", "broken", "amazing", "best", "dominates"]
+    },
+    {
+      "id": "weaknesses",
+      "type": "array",
+      "question": "What are this pokemon's common counters, checks, or competitive downsides?",
+      "search_hints": ["loses to", "checked by", "countered", "weak to", "struggles", "problem", "4x"]
+    },
+    {
+      "id": "design_appeal",
+      "type": "string",
+      "question": "What do people say about this pokemon's visual design, aesthetics, or coolness factor?",
+      "search_hints": ["looks", "design", "cool", "ugly", "shiny", "favorite", "love", "aesthetic"]
+    },
+    {
+      "id": "vs_comparison",
+      "type": "string",
+      "question": "What other pokemon is this one directly compared to, and how do they differ?",
+      "search_hints": ["vs", "compared to", "over", "instead of", "better than", "worse than", "outclassed"]
+    }
+  ]
+}

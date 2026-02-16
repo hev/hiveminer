@@ -34,6 +34,8 @@ func cmdRun(args []string) error {
 	fs.StringVar(subreddits, "r", "", "Subreddits (shorthand)")
 	fs.IntVar(limit, "l", 20, "Limit (shorthand)")
 	fs.StringVar(outputDir, "o", "./output", "Output directory (shorthand)")
+	verbose := fs.Bool("verbose", false, "Show full agent log output")
+	fs.BoolVar(verbose, "v", false, "Verbose (shorthand)")
 
 	fs.Parse(args)
 
@@ -86,7 +88,7 @@ func cmdRun(args []string) error {
 	agentLogger := func(name, model string) claude.EventHandler {
 		return claude.NewLogger(os.Stderr,
 			claude.LogTokens(true),
-			claude.LogResult(false),
+			claude.LogContent(*verbose),
 			claude.WithAgentName(name),
 			claude.WithModelName(model),
 		)
