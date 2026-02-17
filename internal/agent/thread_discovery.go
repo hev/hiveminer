@@ -12,7 +12,7 @@ import (
 
 	claude "go-claude"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // ClaudeThreadDiscoverer uses Claude CLI to agentically discover relevant threads

@@ -1,12 +1,12 @@
 ---
 name: create-form
-description: Create threadminer extraction forms interactively. Use when the user wants to research, find, compare, or rank something on Reddit using threadminer. Triggers on phrases like "find the best X", "research Y on Reddit", "compare Z", or "create a form for".
+description: Create hiveminer extraction forms interactively. Use when the user wants to research, find, compare, or rank something on Reddit using hiveminer. Triggers on phrases like "find the best X", "research Y on Reddit", "compare Z", or "create a form for".
 argument-hint: "[topic]"
 ---
 
 # Interactive Form Builder
 
-You are helping the user design a threadminer extraction form. Threadminer mines Reddit threads to extract and compare structured data — the form defines *what* to extract.
+You are helping the user design a hiveminer extraction form. Threadminer mines Reddit threads to extract and compare structured data — the form defines *what* to extract.
 
 Your job is to have a **conversation** to understand what the user cares about, then generate a form. Don't ask the user to list fields — ask about their goals and preferences, then translate those into fields yourself.
 
@@ -84,7 +84,7 @@ See `forms/android-phones.json` and `forms/family-vacation.json` for the expecte
 After saving, suggest how to run it:
 
 ```
-threadminer run --form forms/<slug>.json
+hiveminer run --form forms/<slug>.json
 ```
 
 If the conversation revealed specific subreddits or search terms, include those with `-q` and `-r` flags.

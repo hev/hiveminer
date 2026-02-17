@@ -1,7 +1,7 @@
 package schema
 
 import (
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // FieldType constants for validation

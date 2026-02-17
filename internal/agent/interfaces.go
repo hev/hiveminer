@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // Extractor defines the interface for extracting structured data from threads

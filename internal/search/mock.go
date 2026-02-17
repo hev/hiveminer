@@ -3,7 +3,7 @@ package search
 import (
 	"context"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // MockSearcher implements Searcher for testing

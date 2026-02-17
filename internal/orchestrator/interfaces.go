@@ -3,7 +3,7 @@ package orchestrator
 import (
 	"context"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // RunConfig holds configuration for an extraction run

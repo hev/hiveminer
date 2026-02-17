@@ -1,4 +1,4 @@
-module threadminer
+module hiveminer
 
 go 1.25.5
 

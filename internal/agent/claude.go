@@ -8,7 +8,7 @@ import (
 
 	claude "go-claude"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // ClaudeExtractor implements Extractor using the Claude CLI

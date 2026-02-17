@@ -1,12 +1,12 @@
 .PHONY: build install clean help
 
-BINARY := threadminer
+BINARY := hiveminer
 
 build:
-	go build -o $(BINARY) ./cmd/threadminer
+	go build -o $(BINARY) ./cmd/hiveminer
 
 install:
-	go install ./cmd/threadminer
+	go install ./cmd/hiveminer
 
 clean:
 	rm -f $(BINARY)

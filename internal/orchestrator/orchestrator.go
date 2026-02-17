@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"threadminer/internal/agent"
-	"threadminer/internal/schema"
-	"threadminer/internal/search"
-	"threadminer/internal/session"
-	"threadminer/pkg/types"
+	"hiveminer/internal/agent"
+	"hiveminer/internal/schema"
+	"hiveminer/internal/search"
+	"hiveminer/internal/session"
+	"hiveminer/pkg/types"
 )
 
 // DefaultOrchestrator implements the extraction pipeline

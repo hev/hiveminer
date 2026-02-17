@@ -9,7 +9,7 @@ import (
 
 	claude "go-claude"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // ClaudeDiscoverer uses Claude CLI to agentically discover subreddits

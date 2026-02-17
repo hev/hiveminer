@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"threadminer/internal/session"
-	"threadminer/pkg/types"
+	"hiveminer/internal/session"
+	"hiveminer/pkg/types"
 )
 
 // ANSI color codes
@@ -50,21 +50,21 @@ func cmdRuns(args []string) error {
 }
 
 func printRunsUsage() {
-	fmt.Println(`threadminer runs - View extraction runs and results
+	fmt.Println(`hiveminer runs - View extraction runs and results
 
 Usage:
-  threadminer runs <command> [options]
+  hiveminer runs <command> [options]
 
 Commands:
   ls       List all runs in the output directory
   show     Show extraction results for a run
 
 Examples:
-  threadminer runs ls
-  threadminer runs ls -o ./output
-  threadminer runs show family-vacation-20260214-045927
-  threadminer runs show family-vacation -n 0       # show all results
-  threadminer runs show ./output/family-vacation-20260214-045927`)
+  hiveminer runs ls
+  hiveminer runs ls -o ./output
+  hiveminer runs show family-vacation-20260214-045927
+  hiveminer runs show family-vacation -n 0       # show all results
+  hiveminer runs show ./output/family-vacation-20260214-045927`)
 }
 
 type sessionInfo struct {
@@ -199,8 +199,8 @@ func cmdRunsShow(args []string) error {
 
 	if fs.NArg() < 1 {
 		fmt.Fprintln(os.Stderr, "Error: run ID required")
-		fmt.Fprintln(os.Stderr, "Usage: threadminer runs show <run-id>")
-		fmt.Fprintln(os.Stderr, "  Run 'threadminer runs ls' to see available runs")
+		fmt.Fprintln(os.Stderr, "Usage: hiveminer runs show <run-id>")
+		fmt.Fprintln(os.Stderr, "  Run 'hiveminer runs ls' to see available runs")
 		return fmt.Errorf("run ID required")
 	}
 
@@ -216,7 +216,7 @@ func cmdRunsShow(args []string) error {
 			matched := findSessionByPrefix(*outputDir, target)
 			if matched == "" {
 				fmt.Fprintf(os.Stderr, "Error: no run found matching %q\n", target)
-				fmt.Fprintln(os.Stderr, "  Run 'threadminer runs ls' to see available runs")
+				fmt.Fprintln(os.Stderr, "  Run 'hiveminer runs ls' to see available runs")
 				return fmt.Errorf("run not found: %s", target)
 			}
 			sessionDir = matched

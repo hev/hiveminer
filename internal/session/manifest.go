@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 const manifestFile = "manifest.json"

@@ -1,18 +1,18 @@
 ---
 name: reddit
 description: Browse Reddit from the command line. Use when the user wants to search Reddit, find posts on a subreddit, view trending content, or explore Reddit discussions.
-allowed-tools: Bash(./threadminer *)
+allowed-tools: Bash(./hiveminer *)
 ---
 
 # Reddit CLI Skill
 
-Browse Reddit directly from the terminal using the threadminer CLI.
+Browse Reddit directly from the terminal using the hiveminer CLI.
 
 ## Available Commands
 
 ### List posts from a subreddit
 ```bash
-./threadminer ls <subreddit> --sort <sort> --limit <n> --nsfw=<bool>
+./hiveminer ls <subreddit> --sort <sort> --limit <n> --nsfw=<bool>
 ```
 
 Arguments:
@@ -23,7 +23,7 @@ Arguments:
 
 ### Search Reddit
 ```bash
-./threadminer search "<query>" --subreddit <subreddit> --limit <n> --nsfw=<bool>
+./hiveminer search "<query>" --subreddit <subreddit> --limit <n> --nsfw=<bool>
 ```
 
 Arguments:
@@ -34,7 +34,7 @@ Arguments:
 
 ### View/Search Thread Comments
 ```bash
-./threadminer thread <permalink> --search "<query>" --limit <n>
+./hiveminer thread <permalink> --search "<query>" --limit <n>
 ```
 
 Arguments:
@@ -46,37 +46,37 @@ Arguments:
 
 **Browse hot posts on r/programming:**
 ```bash
-./threadminer ls programming
+./hiveminer ls programming
 ```
 
 **Get top posts from r/golang:**
 ```bash
-./threadminer ls golang --sort top --limit 15
+./hiveminer ls golang --sort top --limit 15
 ```
 
 **Search for discussions:**
 ```bash
-./threadminer search "machine learning tutorials"
+./hiveminer search "machine learning tutorials"
 ```
 
 **Search within a specific subreddit:**
 ```bash
-./threadminer search "async await" --subreddit javascript
+./hiveminer search "async await" --subreddit javascript
 ```
 
 **Filter out NSFW content:**
 ```bash
-./threadminer ls askreddit --nsfw=false
+./hiveminer ls askreddit --nsfw=false
 ```
 
 **View comments on a thread:**
 ```bash
-./threadminer thread /r/golang/comments/1pdzpbh
+./hiveminer thread /r/golang/comments/1pdzpbh
 ```
 
 **Search within thread comments:**
 ```bash
-./threadminer thread /r/golang/comments/1pdzpbh --search "errors.Is"
+./hiveminer thread /r/golang/comments/1pdzpbh --search "errors.Is"
 ```
 
 ## Output

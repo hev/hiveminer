@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 const (

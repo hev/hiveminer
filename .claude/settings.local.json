@@ -4,11 +4,13 @@
       "WebFetch(domain:github.com)",
       "Bash(rdt ls:*)",
       "Bash(python3:*)",
-      "Bash(./threadminer:*)",
-      "Bash(threadminer ls:*)",
+      "Bash(./hiveminer:*)",
+      "Bash(hiveminer ls:*)",
       "Skill(reddit)",
       "WebFetch(domain:www.reddit.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git commit:*)",
+      "Bash(git -C:*)"
     ]
   }
 }

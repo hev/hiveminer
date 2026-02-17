@@ -10,7 +10,7 @@ import (
 
 	claude "go-claude"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // ClaudeEvaluator uses Claude CLI to evaluate individual thread relevance

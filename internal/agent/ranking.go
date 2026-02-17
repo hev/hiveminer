@@ -13,7 +13,7 @@ import (
 
 	claude "go-claude"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // ClaudeRanker implements Ranker using algorithmic scoring + Claude agentic assessment

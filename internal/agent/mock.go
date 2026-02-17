@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // MockRanker implements Ranker for testing

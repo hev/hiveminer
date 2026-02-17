@@ -1,5 +1,5 @@
 output/
-threadminer
+hiveminer
 .DS_Store
 .claude/traces/
 node_modules/

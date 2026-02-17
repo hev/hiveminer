@@ -3,7 +3,7 @@ package search
 import (
 	"context"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // Searcher defines the interface for searching and fetching Reddit content

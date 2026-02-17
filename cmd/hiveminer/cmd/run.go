@@ -11,10 +11,10 @@ import (
 
 	claude "go-claude"
 
-	"threadminer/internal/agent"
-	"threadminer/internal/orchestrator"
-	"threadminer/internal/schema"
-	"threadminer/internal/search"
+	"hiveminer/internal/agent"
+	"hiveminer/internal/orchestrator"
+	"hiveminer/internal/schema"
+	"hiveminer/internal/search"
 )
 
 func cmdRun(args []string) error {
@@ -41,7 +41,7 @@ func cmdRun(args []string) error {
 
 	if *formPath == "" {
 		fmt.Fprintln(os.Stderr, "Error: --form is required")
-		fmt.Fprintln(os.Stderr, "Usage: threadminer run --form forms/gifts.json [-q \"search query\"] [-r subreddits] --limit 20")
+		fmt.Fprintln(os.Stderr, "Usage: hiveminer run --form forms/gifts.json [-q \"search query\"] [-r subreddits] --limit 20")
 		return fmt.Errorf("--form is required")
 	}
 

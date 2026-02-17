@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"threadminer/pkg/types"
+	"hiveminer/pkg/types"
 )
 
 // LoadForm loads and validates a form from a JSON file
