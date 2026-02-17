@@ -13,6 +13,12 @@ func Execute(args []string) error {
 		return cmdRun(args[1:])
 	case "runs":
 		return cmdRuns(args[1:])
+	case "search":
+		return cmdSearch(args[1:])
+	case "ls":
+		return cmdLs(args[1:])
+	case "thread":
+		return cmdThread(args[1:])
 	case "help", "-h", "--help":
 		printUsage()
 		return nil
@@ -32,6 +38,9 @@ Usage:
 Commands:
   run      Run an extraction pipeline
   runs     View extraction runs and results
+  search   Search Reddit posts
+  ls       List posts from a subreddit
+  thread   View or export thread comments
 
 Run 'hiveminer <command> --help' for details on a specific command.`)
 }
