@@ -17,15 +17,17 @@ type ClaudeExtractor struct {
 	prompts fs.FS
 	model   string
 	logger  rack.EventHandler
+	backend string
 }
 
 // NewClaudeExtractor creates a new Claude CLI extractor
-func NewClaudeExtractor(runner Runner, prompts fs.FS, model string, logger rack.EventHandler) *ClaudeExtractor {
+func NewClaudeExtractor(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeExtractor {
 	return &ClaudeExtractor{
 		runner:  runner,
 		prompts: prompts,
 		model:   model,
 		logger:  logger,
+		backend: backend,
 	}
 }
 
@@ -46,7 +48,9 @@ func (c *ClaudeExtractor) ExtractFieldsWithOutput(ctx context.Context, thread *t
 	// Build run options
 	opts := []rack.RunOption{
 		rack.WithModel(c.model),
-		rack.WithMaxOutputTokens(64000),
+	}
+	if c.backend != "codex" {
+		opts = append(opts, rack.WithMaxOutputTokens(64000))
 	}
 	if c.logger != nil {
 		opts = append(opts, rack.WithEventHandler(c.logger))
@@ -58,7 +62,7 @@ func (c *ClaudeExtractor) ExtractFieldsWithOutput(ctx context.Context, thread *t
 	// Call Claude CLI
 	result, err := c.runner.Run(ctx, prompt, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("calling claude: %w", err)
+		return nil, fmt.Errorf("running agent: %w", err)
 	}
 
 	// Parse the response

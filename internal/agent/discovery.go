@@ -19,11 +19,12 @@ type ClaudeDiscoverer struct {
 	prompts fs.FS
 	model   string
 	logger  rack.EventHandler
+	backend string
 }
 
 // NewClaudeDiscoverer creates a new Claude-based subreddit discoverer
-func NewClaudeDiscoverer(runner Runner, prompts fs.FS, model string, logger rack.EventHandler) *ClaudeDiscoverer {
-	return &ClaudeDiscoverer{runner: runner, prompts: prompts, model: model, logger: logger}
+func NewClaudeDiscoverer(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeDiscoverer {
+	return &ClaudeDiscoverer{runner: runner, prompts: prompts, model: model, logger: logger, backend: backend}
 }
 
 type discoveryResponse struct {
@@ -48,17 +49,21 @@ func (d *ClaudeDiscoverer) DiscoverSubreddits(ctx context.Context, form *types.F
 	}
 
 	opts := []rack.RunOption{
-		rack.WithAllowedTools(fmt.Sprintf("Bash(%s *)", executable)),
-		rack.WithDisallowedTools("WebSearch", "WebFetch"),
-		rack.WithMaxTurns(15),
 		rack.WithModel(d.model),
+	}
+	if d.backend != "codex" {
+		opts = append(opts,
+			rack.WithAllowedTools(fmt.Sprintf("Bash(%s *)", executable)),
+			rack.WithDisallowedTools("WebSearch", "WebFetch"),
+			rack.WithMaxTurns(15),
+		)
 	}
 	if d.logger != nil {
 		opts = append(opts, rack.WithEventHandler(d.logger))
 	}
 	result, err := d.runner.Run(ctx, prompt, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("calling claude: %w", err)
+		return nil, fmt.Errorf("running agent: %w", err)
 	}
 
 	names, err := d.parseResponse(result.Text)
@@ -93,10 +98,11 @@ Return ONLY this JSON (no other text):
 
 Do not include the r/ prefix in names. Order from most relevant to least relevant.`, responseText)
 
-	result, err := d.runner.Run(ctx, prompt,
-		rack.WithModel(d.model),
-		rack.WithMaxTurns(1),
-	)
+	retryOpts := []rack.RunOption{rack.WithModel(d.model)}
+	if d.backend != "codex" {
+		retryOpts = append(retryOpts, rack.WithMaxTurns(1))
+	}
+	result, err := d.runner.Run(ctx, prompt, retryOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("retry format call: %w", err)
 	}

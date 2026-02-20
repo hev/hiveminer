@@ -11,6 +11,7 @@ import (
 
 	rack "go-rack"
 	"go-rack/claude"
+	"go-rack/codex"
 
 	"hiveminer/internal/agent"
 	"hiveminer/internal/orchestrator"
@@ -35,10 +36,29 @@ func cmdRun(args []string) error {
 	fs.StringVar(subreddits, "r", "", "Subreddits (shorthand)")
 	fs.IntVar(limit, "l", 20, "Limit (shorthand)")
 	fs.StringVar(outputDir, "o", "./output", "Output directory (shorthand)")
+	useCodex := fs.Bool("codex", false, "Use Codex backend instead of Claude")
 	verbose := fs.Bool("verbose", false, "Show full agent log output")
 	fs.BoolVar(verbose, "v", false, "Verbose (shorthand)")
 
 	fs.Parse(args)
+
+	// When using codex, switch to codex-appropriate model defaults unless explicitly set
+	if *useCodex {
+		explicit := map[string]bool{}
+		fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+		if !explicit["discovery-model"] {
+			*discoveryModel = "" // codex CLI default
+		}
+		if !explicit["eval-model"] {
+			*evalModel = "" // codex CLI default
+		}
+		if !explicit["extract-model"] {
+			*extractModel = "gpt-5.1-codex-mini"
+		}
+		if !explicit["rank-model"] {
+			*rankModel = "gpt-5.1-codex-mini"
+		}
+	}
 
 	if *formPath == "" {
 		fmt.Fprintln(os.Stderr, "Error: --form is required")
@@ -85,28 +105,40 @@ func cmdRun(args []string) error {
 		cancel()
 	}()
 
-	// Create shared Claude client and prompt filesystem
+	// Create shared client and prompt filesystem
+	var client agent.Runner
+	backend := "claude"
+	if *useCodex {
+		client = codex.NewClient()
+		backend = "codex"
+	} else {
+		client = claude.NewClient()
+	}
 	agentLogger := func(name, model string) rack.EventHandler {
-		return rack.NewLogger(os.Stderr,
+		logOpts := []rack.LoggerOption{
 			rack.LogTokens(true),
 			rack.LogContent(*verbose),
 			rack.WithAgentName(name),
 			rack.WithModelName(model),
-			rack.WithPricing(claude.PricingForModel(model)),
-			rack.WithContextWindow(claude.ContextWindowForModel(model)),
-		)
+		}
+		if backend != "codex" {
+			logOpts = append(logOpts,
+				rack.WithPricing(claude.PricingForModel(model)),
+				rack.WithContextWindow(claude.ContextWindowForModel(model)),
+			)
+		}
+		return rack.NewLogger(os.Stderr, logOpts...)
 	}
-	client := claude.NewClient()
 	prompts := os.DirFS("prompts")
 
 	// Create orchestrator with agentic phases
 	searcher := search.NewRedditSearcher()
 	orch := orchestrator.New(searcher)
-	orch.SetDiscoverer(agent.NewClaudeDiscoverer(client, prompts, *discoveryModel, agentLogger("discovery", *discoveryModel)))
-	orch.SetThreadDiscoverer(agent.NewClaudeThreadDiscoverer(client, prompts, *discoveryModel, agentLogger("threads", *discoveryModel)))
-	orch.SetThreadEvaluator(agent.NewClaudeEvaluator(client, prompts, *evalModel, agentLogger("eval", *evalModel)))
-	orch.SetExtractor(agent.NewClaudeExtractor(client, prompts, *extractModel, agentLogger("extract", *extractModel)))
-	orch.SetRanker(agent.NewClaudeRanker(client, prompts, *rankModel, agentLogger("rank", *rankModel)))
+	orch.SetDiscoverer(agent.NewClaudeDiscoverer(client, prompts, *discoveryModel, agentLogger("discovery", *discoveryModel), backend))
+	orch.SetThreadDiscoverer(agent.NewClaudeThreadDiscoverer(client, prompts, *discoveryModel, agentLogger("threads", *discoveryModel), backend))
+	orch.SetThreadEvaluator(agent.NewClaudeEvaluator(client, prompts, *evalModel, agentLogger("eval", *evalModel), backend))
+	orch.SetExtractor(agent.NewClaudeExtractor(client, prompts, *extractModel, agentLogger("extract", *extractModel), backend))
+	orch.SetRanker(agent.NewClaudeRanker(client, prompts, *rankModel, agentLogger("rank", *rankModel), backend))
 
 	// Run extraction
 	config := orchestrator.RunConfig{

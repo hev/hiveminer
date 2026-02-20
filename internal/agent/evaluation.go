@@ -19,11 +19,12 @@ type ClaudeEvaluator struct {
 	prompts fs.FS
 	model   string
 	logger  rack.EventHandler
+	backend string
 }
 
 // NewClaudeEvaluator creates a new Claude-based thread evaluator
-func NewClaudeEvaluator(runner Runner, prompts fs.FS, model string, logger rack.EventHandler) *ClaudeEvaluator {
-	return &ClaudeEvaluator{runner: runner, prompts: prompts, model: model, logger: logger}
+func NewClaudeEvaluator(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeEvaluator {
+	return &ClaudeEvaluator{runner: runner, prompts: prompts, model: model, logger: logger, backend: backend}
 }
 
 // evalFileResult is the JSON structure the agent writes to the eval output file
@@ -51,14 +52,18 @@ func (e *ClaudeEvaluator) EvaluateThread(ctx context.Context, form *types.Form, 
 	}
 
 	opts := []rack.RunOption{
-		rack.WithAllowedTools(
-			fmt.Sprintf("Bash(%s *)", executable),
-			fmt.Sprintf("Bash(* > %s)", threadPath),
-			fmt.Sprintf("Write(%s/*)", sessionDir),
-		),
-		rack.WithDisallowedTools("WebSearch", "WebFetch"),
-		rack.WithMaxTurns(10),
 		rack.WithModel(e.model),
+	}
+	if e.backend != "codex" {
+		opts = append(opts,
+			rack.WithAllowedTools(
+				fmt.Sprintf("Bash(%s *)", executable),
+				fmt.Sprintf("Bash(* > %s)", threadPath),
+				fmt.Sprintf("Write(%s/*)", sessionDir),
+			),
+			rack.WithDisallowedTools("WebSearch", "WebFetch"),
+			rack.WithMaxTurns(10),
+		)
 	}
 	if e.logger != nil {
 		opts = append(opts, rack.WithEventHandler(e.logger))
@@ -71,7 +76,7 @@ func (e *ClaudeEvaluator) EvaluateThread(ctx context.Context, form *types.Form, 
 
 		_, err = e.runner.Run(ctx, prompt, opts...)
 		if err != nil {
-			lastErr = fmt.Errorf("calling claude (attempt %d/%d): %w", attempt, maxAttempts, err)
+			lastErr = fmt.Errorf("running agent (attempt %d/%d): %w", attempt, maxAttempts, err)
 			if attempt < maxAttempts {
 				continue
 			}

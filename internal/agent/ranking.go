@@ -22,15 +22,17 @@ type ClaudeRanker struct {
 	prompts fs.FS
 	model   string
 	logger  rack.EventHandler
+	backend string
 }
 
 // NewClaudeRanker creates a new ranker
-func NewClaudeRanker(runner Runner, prompts fs.FS, model string, logger rack.EventHandler) *ClaudeRanker {
+func NewClaudeRanker(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeRanker {
 	return &ClaudeRanker{
 		runner:  runner,
 		prompts: prompts,
 		model:   model,
 		logger:  logger,
+		backend: backend,
 	}
 }
 
@@ -447,7 +449,7 @@ func (r *ClaudeRanker) AssessWithClaude(ctx context.Context, form *types.Form, i
 	}
 	result, err := r.runner.Run(ctx, prompt, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("calling claude: %w", err)
+		return nil, fmt.Errorf("running agent: %w", err)
 	}
 
 	// Parse response

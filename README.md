@@ -22,7 +22,7 @@ Results are printed inline and saved to `./output/`.
 ### Prerequisites
 
 - Go 1.25+
-- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) or [Codex CLI](https://github.com/openai/codex) installed and authenticated
 - A form JSON file defining what to extract (see `forms/` for examples)
 
 ### Creating a Form
@@ -174,7 +174,11 @@ hiveminer run --form <path> [flags]
       --eval-model      Model for evaluation (default: opus)
       --extract-model   Model for extraction (default: haiku)
       --rank-model      Model for ranking (default: haiku)
+      --codex           Use Codex backend instead of Claude
   -v, --verbose         Show full agent logs
+
+# Run with Codex backend
+hiveminer run --form forms/family-vacation.json --codex
 
 # View past runs
 hiveminer runs ls [-o ./output]
@@ -185,6 +189,31 @@ hiveminer search "query" [-r subreddit]
 hiveminer ls <subreddit> [-s hot]
 hiveminer thread <permalink>
 ```
+
+### Backends
+
+Hiveminer supports two backends: **Claude** (default) and **Codex**.
+
+```bash
+# Claude (default)
+hiveminer run --form forms/family-vacation.json
+
+# Codex
+hiveminer run --form forms/family-vacation.json --codex
+```
+
+With `--codex`, model defaults switch automatically:
+
+| Phase | Claude default | Codex default |
+|-------|---------------|---------------|
+| Discovery (0+1) | opus | codex CLI default |
+| Evaluation (2) | opus | codex CLI default |
+| Extraction (3) | haiku | gpt-5.1-codex-mini |
+| Ranking (4) | haiku | gpt-5.1-codex-mini |
+
+You can override any model explicitly regardless of backend: `--extract-model gpt-5.1-codex-mini`.
+
+Codex does not support agentic options (`WithMaxTurns`, `WithAllowedTools`, `WithDisallowedTools`, `WithMaxOutputTokens`), so these are automatically omitted when using the codex backend.
 
 ### Session Resumption
 

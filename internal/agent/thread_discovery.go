@@ -21,11 +21,12 @@ type ClaudeThreadDiscoverer struct {
 	prompts fs.FS
 	model   string
 	logger  rack.EventHandler
+	backend string
 }
 
 // NewClaudeThreadDiscoverer creates a new Claude-based thread discoverer
-func NewClaudeThreadDiscoverer(runner Runner, prompts fs.FS, model string, logger rack.EventHandler) *ClaudeThreadDiscoverer {
-	return &ClaudeThreadDiscoverer{runner: runner, prompts: prompts, model: model, logger: logger}
+func NewClaudeThreadDiscoverer(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeThreadDiscoverer {
+	return &ClaudeThreadDiscoverer{runner: runner, prompts: prompts, model: model, logger: logger, backend: backend}
 }
 
 // discoveryResult is the JSON structure the agent writes to the output file
@@ -61,20 +62,24 @@ func (d *ClaudeThreadDiscoverer) DiscoverThreads(ctx context.Context, form *type
 	}
 
 	opts := []rack.RunOption{
-		rack.WithAllowedTools(
-			fmt.Sprintf("Bash(%s *)", executable),
-			fmt.Sprintf("Write(%s/*)", sessionDir),
-		),
-		rack.WithDisallowedTools("WebSearch", "WebFetch"),
-		rack.WithMaxTurns(25),
 		rack.WithModel(d.model),
+	}
+	if d.backend != "codex" {
+		opts = append(opts,
+			rack.WithAllowedTools(
+				fmt.Sprintf("Bash(%s *)", executable),
+				fmt.Sprintf("Write(%s/*)", sessionDir),
+			),
+			rack.WithDisallowedTools("WebSearch", "WebFetch"),
+			rack.WithMaxTurns(25),
+		)
 	}
 	if d.logger != nil {
 		opts = append(opts, rack.WithEventHandler(d.logger))
 	}
 	_, err = d.runner.Run(ctx, prompt, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("calling claude: %w", err)
+		return nil, fmt.Errorf("running agent: %w", err)
 	}
 
 	// Parse the output file
