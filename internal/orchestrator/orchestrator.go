@@ -310,6 +310,15 @@ func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig,
 				ts := item.state
 				n := done.Add(1)
 				total := totalFed.Load()
+				markThreadFailed := func(err error) {
+					idx := session.FindThreadIndex(manifest, ts.PostID)
+					if idx >= 0 {
+						manifest.Threads[idx].Status = "failed"
+						if err != nil {
+							manifest.Threads[idx].Error = err.Error()
+						}
+					}
+				}
 
 				// Step 1: Evaluate if needed
 				if item.needsEval {
@@ -317,7 +326,7 @@ func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig,
 						evalResult, err := o.threadEvaluator.EvaluateThread(ctx, config.Form, ts, sessionDir)
 						if err != nil {
 							mu.Lock()
-							session.UpdateThreadStatus(manifest, ts.PostID, "failed")
+							markThreadFailed(fmt.Errorf("evaluation failed: %w", err))
 							mu.Unlock()
 							markDirty()
 							fmt.Printf("  [%d/%d] %s → eval failed: %v\n", n, total, truncate(ts.Title, 50), err)
@@ -348,7 +357,7 @@ func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig,
 						thread, err := o.searcher.GetThread(ctx, ts.Permalink, 100)
 						if err != nil {
 							mu.Lock()
-							session.UpdateThreadStatus(manifest, ts.PostID, "failed")
+							markThreadFailed(fmt.Errorf("thread fetch failed: %w", err))
 							mu.Unlock()
 							markDirty()
 							fmt.Printf("  [%d/%d] %s → fetch failed: %v\n", n, total, truncate(ts.Title, 50), err)
@@ -360,14 +369,14 @@ func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig,
 						threadData, err := json.MarshalIndent(thread, "", "  ")
 						if err != nil {
 							mu.Lock()
-							session.UpdateThreadStatus(manifest, ts.PostID, "failed")
+							markThreadFailed(fmt.Errorf("thread marshal failed: %w", err))
 							mu.Unlock()
 							markDirty()
 							continue
 						}
 						if err := os.WriteFile(threadPath, threadData, 0644); err != nil {
 							mu.Lock()
-							session.UpdateThreadStatus(manifest, ts.PostID, "failed")
+							markThreadFailed(fmt.Errorf("thread write failed: %w", err))
 							mu.Unlock()
 							markDirty()
 							continue
@@ -386,34 +395,20 @@ func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig,
 				}
 
 				// Step 2: Extract fields from thread JSON
-				threadPath := filepath.Join(sessionDir, fmt.Sprintf("thread_%s.json", ts.PostID))
-				threadData, err := os.ReadFile(threadPath)
+				thread, err := o.loadThreadForExtraction(ctx, ts, sessionDir)
 				if err != nil {
 					mu.Lock()
-					session.UpdateThreadStatus(manifest, ts.PostID, "failed")
+					markThreadFailed(err)
 					mu.Unlock()
 					markDirty()
-					fmt.Printf("  [%d/%d] %s → thread file missing: %v\n", n, total, truncate(ts.Title, 50), err)
+					fmt.Printf("  [%d/%d] %s → thread load failed: %v\n", n, total, truncate(ts.Title, 50), err)
 					continue
 				}
 
-				var thread types.Thread
-				if err := json.Unmarshal(threadData, &thread); err != nil {
-					mu.Lock()
-					session.UpdateThreadStatus(manifest, ts.PostID, "failed")
-					mu.Unlock()
-					markDirty()
-					continue
-				}
-
-				result, err := o.extractSingle(ctx, &thread, config.Form, logWriter)
+				result, err := o.extractSingle(ctx, thread, config.Form, logWriter)
 				if err != nil {
 					mu.Lock()
-					idx := session.FindThreadIndex(manifest, ts.PostID)
-					if idx >= 0 {
-						manifest.Threads[idx].Status = "failed"
-						manifest.Threads[idx].Error = err.Error()
-					}
+					markThreadFailed(fmt.Errorf("extraction failed: %w", err))
 					mu.Unlock()
 					markDirty()
 					fmt.Printf("  [%d/%d] %s → extract failed: %v\n", n, total, truncate(ts.Title, 50), err)
@@ -573,6 +568,24 @@ func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig,
 		}
 		fmt.Printf("  Evaluate & Extract completed in %s (%d extracted)\n",
 			formatDuration(time.Since(evalExtractStart)), extracted.Load())
+		mu.Lock()
+		counts = session.CountByStatus(manifest)
+		mu.Unlock()
+		fmt.Printf("  Round status: %d extracted, %d skipped, %d failed, %d pending\n",
+			counts["extracted"], counts["skipped"], counts["failed"], counts["pending"])
+
+		// Circuit breaker: if first round produced zero extractions and everything failed, abort
+		if extracted.Load() == 0 && round == 0 {
+			mu.Lock()
+			counts = session.CountByStatus(manifest)
+			failCount := counts["failed"] + counts["skipped"]
+			total := failCount + counts["extracted"]
+			mu.Unlock()
+			if total > 0 && failCount == total {
+				fmt.Printf("\n=== Circuit breaker: all %d threads failed or were skipped with 0 extracted. Aborting. ===\n", failCount)
+				break
+			}
+		}
 	}
 
 	close(workCh)
@@ -584,6 +597,50 @@ func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig,
 
 	fmt.Printf("Extraction log: %s\n", logPath)
 	return processed, nil
+}
+
+func (o *DefaultOrchestrator) loadThreadForExtraction(ctx context.Context, ts types.ThreadState, sessionDir string) (*types.Thread, error) {
+	threadPath := filepath.Join(sessionDir, fmt.Sprintf("thread_%s.json", ts.PostID))
+	threadData, readErr := os.ReadFile(threadPath)
+	if readErr == nil {
+		thread, parseErr := parseThreadJSON(threadData)
+		if parseErr == nil {
+			return thread, nil
+		}
+		fmt.Printf("  [%s] thread payload invalid (%v), refetching canonical JSON\n", ts.PostID, parseErr)
+	} else if !os.IsNotExist(readErr) {
+		fmt.Printf("  [%s] thread payload unreadable (%v), refetching canonical JSON\n", ts.PostID, readErr)
+	}
+
+	thread, err := o.searcher.GetThread(ctx, ts.Permalink, 100)
+	if err != nil {
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return nil, fmt.Errorf("refetch failed after read error (%v): %w", readErr, err)
+		}
+		return nil, fmt.Errorf("refetch failed: %w", err)
+	}
+
+	canonical, err := json.MarshalIndent(thread, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshaling canonical thread JSON: %w", err)
+	}
+	if err := os.WriteFile(threadPath, canonical, 0644); err != nil {
+		return nil, fmt.Errorf("writing canonical thread JSON: %w", err)
+	}
+	fmt.Printf("  [%s] refetched thread and wrote canonical payload\n", ts.PostID)
+
+	return thread, nil
+}
+
+func parseThreadJSON(data []byte) (*types.Thread, error) {
+	var thread types.Thread
+	if err := json.Unmarshal(data, &thread); err != nil {
+		return nil, err
+	}
+	if thread.Post.ID == "" || thread.Post.Permalink == "" {
+		return nil, fmt.Errorf("missing post id/permalink in payload")
+	}
+	return &thread, nil
 }
 
 // findThreads discovers threads using the agentic discoverer or direct search.

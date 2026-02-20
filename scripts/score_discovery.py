@@ -11,8 +11,8 @@ import json
 import os
 from pathlib import Path
 
-TOOL_RESULTS_DIR = "/Users/hev/.claude/projects/-Users-hev-workspace-threadminer/acf41aff-3382-40b6-8767-41ba0ca0d062/tool-results/"
-OUTPUT_PATH = "/Users/hev/workspace/threadminer/output/christmas-market-skiing-alps-20260216-062028/discovery_results.json"
+TOOL_RESULTS_DIR = "/Users/hev/.claude/projects/-Users-hev-workspace-hev-hiveminer/acf41aff-3382-40b6-8767-41ba0ca0d062/tool-results/"
+OUTPUT_PATH = "/Users/hev/workspace/hev/hiveminer/output/christmas-market-skiing-alps-20260216-062028/discovery_results.json"
 
 MANUAL_POSTS = [
     {"id": "1k7ygd", "title": "Ideas for Skiing and Christmas in Europe", "score": 2, "num_comments": 2, "subreddit": "skiing", "permalink": "/r/skiing/comments/1k7ygd/ideas_for_skiing_and_christmas_in_europe/"},

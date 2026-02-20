@@ -36,6 +36,7 @@ type EvalResult struct {
 	Verdict          string `json:"verdict"` // "keep" or "skip"
 	Reason           string `json:"reason"`
 	EstimatedEntries int    `json:"estimated_entries"`
+	ThreadSaved      bool   `json:"thread_saved"`
 }
 
 // Ranker defines the interface for ranking extracted entries

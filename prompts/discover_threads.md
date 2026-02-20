@@ -15,6 +15,8 @@ Target thread count: {{.TargetCount}}
 ## Tool
 You have access to `{{.Executable}}` — a Reddit CLI tool. Use it to search Reddit and find threads containing relevant discussions.
 
+**IMPORTANT: Do NOT use web search. Only use the provided CLI tool.**
+
 Commands:
 - `{{.Executable}} search "query" -r subreddit --json -l 25` — search within a subreddit, returns JSON array of posts
 - `{{.Executable}} ls subreddit -s top --json -l 25` — list top posts from a subreddit, returns JSON array of posts

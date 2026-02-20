@@ -1,13 +1,15 @@
 {
   "title": "Alpine Christmas Markets with Skiing",
-  "description": "Extract and compare German-speaking Alpine towns that combine traditional Christmas markets with nearby alpine and nordic skiing",
+  "description": "Extract and compare German-speaking Alpine towns that combine traditional Christmas markets with nearby alpine and nordic skiing, with preference for destinations offering spa or thermal bath access",
   "search_hints": [
     "christmas market skiing alps",
     "weihnachtsmarkt ski resort",
     "best christmas market austria skiing",
     "christmas market near ski area",
     "advent market alpine town",
-    "christkindlmarkt ski holiday"
+    "christkindlmarkt ski holiday",
+    "thermal bath spa skiing alps",
+    "therme ski resort austria"
   ],
   "fields": [
     {
@@ -50,6 +52,12 @@
       "type": "string",
       "question": "What cross-country or Nordic skiing options are mentioned nearby? Note trail networks, grooming quality, scenic routes, and whether classic and skating styles are available.",
       "search_hints": ["cross country", "XC", "Nordic", "langlauf", "loipe", "groomed trails", "skating", "classic", "biathlon"]
+    },
+    {
+      "id": "spa_access",
+      "type": "string",
+      "question": "Are there spas, thermal baths, or wellness facilities in or near this town? Include names, types (thermal bath, spa hotel, public wellness center), and any details about what makes them notable.",
+      "search_hints": ["spa", "thermal bath", "Therme", "wellness", "hot spring", "sauna", "hammam", "pool", "relaxation", "après-ski spa", "Badhaus"]
     },
     {
       "id": "ski_to_market_proximity",

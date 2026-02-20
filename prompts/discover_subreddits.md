@@ -9,6 +9,8 @@ User query: {{.Query}}
 ## Tool
 You have access to `{{.Executable}}` — a Reddit CLI tool. Use it to search Reddit and identify which subreddits contain the most relevant discussions.
 
+**IMPORTANT: Do NOT use web search. Only use the provided CLI tool.**
+
 Commands:
 - `{{.Executable}} search "query" -l 10` — search all of Reddit
 - `{{.Executable}} search "query" -r subredditname -l 10` — search within a specific subreddit
