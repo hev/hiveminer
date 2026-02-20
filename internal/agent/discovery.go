@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	claude "go-claude"
+	rack "go-rack"
 
 	"hiveminer/pkg/types"
 )
@@ -18,11 +18,11 @@ type ClaudeDiscoverer struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
-	logger  claude.EventHandler
+	logger  rack.EventHandler
 }
 
 // NewClaudeDiscoverer creates a new Claude-based subreddit discoverer
-func NewClaudeDiscoverer(runner Runner, prompts fs.FS, model string, logger claude.EventHandler) *ClaudeDiscoverer {
+func NewClaudeDiscoverer(runner Runner, prompts fs.FS, model string, logger rack.EventHandler) *ClaudeDiscoverer {
 	return &ClaudeDiscoverer{runner: runner, prompts: prompts, model: model, logger: logger}
 }
 
@@ -47,14 +47,14 @@ func (d *ClaudeDiscoverer) DiscoverSubreddits(ctx context.Context, form *types.F
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	opts := []claude.RunOption{
-		claude.WithAllowedTools(fmt.Sprintf("Bash(%s *)", executable)),
-		claude.WithDisallowedTools("WebSearch", "WebFetch"),
-		claude.WithMaxTurns(15),
-		claude.WithModel(d.model),
+	opts := []rack.RunOption{
+		rack.WithAllowedTools(fmt.Sprintf("Bash(%s *)", executable)),
+		rack.WithDisallowedTools("WebSearch", "WebFetch"),
+		rack.WithMaxTurns(15),
+		rack.WithModel(d.model),
 	}
 	if d.logger != nil {
-		opts = append(opts, claude.WithEventHandler(d.logger))
+		opts = append(opts, rack.WithEventHandler(d.logger))
 	}
 	result, err := d.runner.Run(ctx, prompt, opts...)
 	if err != nil {
@@ -94,8 +94,8 @@ Return ONLY this JSON (no other text):
 Do not include the r/ prefix in names. Order from most relevant to least relevant.`, responseText)
 
 	result, err := d.runner.Run(ctx, prompt,
-		claude.WithModel(d.model),
-		claude.WithMaxTurns(1),
+		rack.WithModel(d.model),
+		rack.WithMaxTurns(1),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("retry format call: %w", err)
@@ -105,7 +105,7 @@ Do not include the r/ prefix in names. Order from most relevant to least relevan
 }
 
 func (d *ClaudeDiscoverer) renderPrompt(form *types.Form, query string, executable string) (string, error) {
-	pt, err := claude.LoadPromptTemplate(d.prompts, "discover_subreddits.md", nil)
+	pt, err := rack.LoadPromptTemplate(d.prompts, "discover_subreddits.md", nil)
 	if err != nil {
 		return "", fmt.Errorf("loading template: %w", err)
 	}
@@ -129,7 +129,7 @@ func (d *ClaudeDiscoverer) renderPrompt(form *types.Form, query string, executab
 
 func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {
 	var parsed discoveryResponse
-	if err := claude.ExtractJSON(response, &parsed); err == nil {
+	if err := rack.ExtractJSON(response, &parsed); err == nil {
 		names := normalizeSubredditNames(extractNamesFromResponse(parsed))
 		if len(names) > 0 {
 			return names, nil
@@ -139,7 +139,7 @@ func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {
 	var objectStringList struct {
 		Subreddits []string `json:"subreddits"`
 	}
-	if err := claude.ExtractJSON(response, &objectStringList); err == nil {
+	if err := rack.ExtractJSON(response, &objectStringList); err == nil {
 		names := normalizeSubredditNames(objectStringList.Subreddits)
 		if len(names) > 0 {
 			return names, nil
@@ -149,7 +149,7 @@ func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {
 	var listObjects []struct {
 		Name string `json:"name"`
 	}
-	if err := claude.ExtractJSONArray(response, &listObjects); err == nil {
+	if err := rack.ExtractJSONArray(response, &listObjects); err == nil {
 		raw := make([]string, 0, len(listObjects))
 		for _, v := range listObjects {
 			raw = append(raw, v.Name)
@@ -161,7 +161,7 @@ func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {
 	}
 
 	var listStrings []string
-	if err := claude.ExtractJSONArray(response, &listStrings); err == nil {
+	if err := rack.ExtractJSONArray(response, &listStrings); err == nil {
 		names := normalizeSubredditNames(listStrings)
 		if len(names) > 0 {
 			return names, nil

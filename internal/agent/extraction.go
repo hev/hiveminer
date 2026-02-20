@@ -6,7 +6,7 @@ import (
 	"io"
 	"io/fs"
 
-	claude "go-claude"
+	rack "go-rack"
 
 	"hiveminer/pkg/types"
 )
@@ -16,11 +16,11 @@ type ClaudeExtractor struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
-	logger  claude.EventHandler
+	logger  rack.EventHandler
 }
 
 // NewClaudeExtractor creates a new Claude CLI extractor
-func NewClaudeExtractor(runner Runner, prompts fs.FS, model string, logger claude.EventHandler) *ClaudeExtractor {
+func NewClaudeExtractor(runner Runner, prompts fs.FS, model string, logger rack.EventHandler) *ClaudeExtractor {
 	return &ClaudeExtractor{
 		runner:  runner,
 		prompts: prompts,
@@ -44,15 +44,15 @@ func (c *ClaudeExtractor) ExtractFieldsWithOutput(ctx context.Context, thread *t
 	}
 
 	// Build run options
-	opts := []claude.RunOption{
-		claude.WithModel(c.model),
-		claude.WithMaxOutputTokens(64000),
+	opts := []rack.RunOption{
+		rack.WithModel(c.model),
+		rack.WithMaxOutputTokens(64000),
 	}
 	if c.logger != nil {
-		opts = append(opts, claude.WithEventHandler(c.logger))
+		opts = append(opts, rack.WithEventHandler(c.logger))
 	}
 	if output != nil {
-		opts = append(opts, claude.WithOutputStream(output))
+		opts = append(opts, rack.WithOutputStream(output))
 	}
 
 	// Call Claude CLI
@@ -75,7 +75,7 @@ func (c *ClaudeExtractor) ExtractFieldsWithOutput(ctx context.Context, thread *t
 
 // renderPrompt renders the extraction prompt template
 func (c *ClaudeExtractor) renderPrompt(thread *types.Thread, form *types.Form) (string, error) {
-	pt, err := claude.LoadPromptTemplate(c.prompts, "extract.md", nil)
+	pt, err := rack.LoadPromptTemplate(c.prompts, "extract.md", nil)
 	if err != nil {
 		return "", fmt.Errorf("loading prompt template: %w", err)
 	}
@@ -124,7 +124,7 @@ func (c *ClaudeExtractor) parseResponse(response string, form *types.Form) (*typ
 		} `json:"entries"`
 	}
 
-	if err := claude.ExtractJSON(response, &parsed); err != nil {
+	if err := rack.ExtractJSON(response, &parsed); err != nil {
 		return nil, fmt.Errorf("extracting JSON: %w", err)
 	}
 

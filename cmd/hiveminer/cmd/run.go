@@ -9,7 +9,8 @@ import (
 	"strings"
 	"syscall"
 
-	claude "go-claude"
+	rack "go-rack"
+	"go-rack/claude"
 
 	"hiveminer/internal/agent"
 	"hiveminer/internal/orchestrator"
@@ -85,12 +86,14 @@ func cmdRun(args []string) error {
 	}()
 
 	// Create shared Claude client and prompt filesystem
-	agentLogger := func(name, model string) claude.EventHandler {
-		return claude.NewLogger(os.Stderr,
-			claude.LogTokens(true),
-			claude.LogContent(*verbose),
-			claude.WithAgentName(name),
-			claude.WithModelName(model),
+	agentLogger := func(name, model string) rack.EventHandler {
+		return rack.NewLogger(os.Stderr,
+			rack.LogTokens(true),
+			rack.LogContent(*verbose),
+			rack.WithAgentName(name),
+			rack.WithModelName(model),
+			rack.WithPricing(claude.PricingForModel(model)),
+			rack.WithContextWindow(claude.ContextWindowForModel(model)),
 		)
 	}
 	client := claude.NewClient()

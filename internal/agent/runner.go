@@ -3,10 +3,10 @@ package agent
 import (
 	"context"
 
-	claude "go-claude"
+	rack "go-rack"
 )
 
 // Runner abstracts the Claude CLI client for mockability.
 type Runner interface {
-	Run(ctx context.Context, prompt string, opts ...claude.RunOption) (claude.Result, error)
+	Run(ctx context.Context, prompt string, opts ...rack.RunOption) (rack.Result, error)
 }

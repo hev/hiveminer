@@ -11,7 +11,7 @@ import (
 	"text/template"
 	"unicode"
 
-	claude "go-claude"
+	rack "go-rack"
 
 	"hiveminer/pkg/types"
 )
@@ -21,11 +21,11 @@ type ClaudeRanker struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
-	logger  claude.EventHandler
+	logger  rack.EventHandler
 }
 
 // NewClaudeRanker creates a new ranker
-func NewClaudeRanker(runner Runner, prompts fs.FS, model string, logger claude.EventHandler) *ClaudeRanker {
+func NewClaudeRanker(runner Runner, prompts fs.FS, model string, logger rack.EventHandler) *ClaudeRanker {
 	return &ClaudeRanker{
 		runner:  runner,
 		prompts: prompts,
@@ -441,9 +441,9 @@ func (r *ClaudeRanker) AssessWithClaude(ctx context.Context, form *types.Form, i
 	}
 
 	// Call Claude
-	opts := []claude.RunOption{claude.WithModel(r.model)}
+	opts := []rack.RunOption{rack.WithModel(r.model)}
 	if r.logger != nil {
-		opts = append(opts, claude.WithEventHandler(r.logger))
+		opts = append(opts, rack.WithEventHandler(r.logger))
 	}
 	result, err := r.runner.Run(ctx, prompt, opts...)
 	if err != nil {
@@ -495,7 +495,7 @@ func (r *ClaudeRanker) renderPrompt(data rankPromptData) (string, error) {
 		},
 	}
 
-	pt, err := claude.LoadPromptTemplate(r.prompts, "rank.md", funcMap)
+	pt, err := rack.LoadPromptTemplate(r.prompts, "rank.md", funcMap)
 	if err != nil {
 		return "", fmt.Errorf("loading rank template: %w", err)
 	}
@@ -505,10 +505,10 @@ func (r *ClaudeRanker) renderPrompt(data rankPromptData) (string, error) {
 
 func parseAssessments(response string) ([]claudeAssessment, error) {
 	var assessments []claudeAssessment
-	err := claude.ExtractJSONArray(response, &assessments)
+	err := rack.ExtractJSONArray(response, &assessments)
 	if err != nil {
 		// No flagged entries — that's valid (everything is clean)
-		if err == claude.ErrNoJSON {
+		if err == rack.ErrNoJSON {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("parsing assessments: %w", err)
