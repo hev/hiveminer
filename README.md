@@ -4,6 +4,11 @@ Extract structured data from Reddit using cascading retrieval — a multi-phase 
 
 Define what you're looking for with a form, point it at Reddit, and get back ranked, deduplicated results with confidence scores and source links.
 
+### Prerequisites
+
+- Go 1.25+
+- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) or [Codex CLI](https://github.com/openai/codex) installed and authenticated
+
 ## Quick Start
 
 ```bash
@@ -14,16 +19,13 @@ make build
 make install
 
 # Run an extraction
-hiveminer run --form forms/family-vacation.json -q "best family vacation destinations"
+hiveminer run --form forms/family-vacation.json
+
+# Run with Codex backend
+hiveminer run --form forms/family-vacation.json --codex
 ```
 
 Results are printed inline and saved to `./output/`.
-
-### Prerequisites
-
-- Go 1.25+
-- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) or [Codex CLI](https://github.com/openai/codex) installed and authenticated
-- A form JSON file defining what to extract (see `forms/` for examples)
 
 ### Creating a Form
 
