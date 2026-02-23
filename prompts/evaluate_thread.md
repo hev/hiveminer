@@ -14,7 +14,7 @@ Permalink: {{.Permalink}}
 
 ## Instructions
 
-1. Fetch the thread using: `{{.Executable}} thread {{.Permalink}} --json -l 100`
+1. Fetch the thread using: `{{.Executable}} thread --json -l 100 {{.Permalink}}`
 2. Read through the post content and comments
 3. Evaluate whether this thread contains information relevant to the form fields above
 4. Consider:
@@ -31,7 +31,7 @@ Permalink: {{.Permalink}}
 ## Output
 
 If the verdict is **keep**, first save the full thread JSON to: `{{.ThreadPath}}`
-You can do this by piping the command output: `{{.Executable}} thread {{.Permalink}} --json -l 100 > {{.ThreadPath}}`
+You can do this by piping the command output: `{{.Executable}} thread --json -l 100 {{.Permalink}} > {{.ThreadPath}}`
 
 Then write your evaluation to: `{{.EvalPath}}`
 

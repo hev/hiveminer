@@ -18,9 +18,9 @@ You have access to `{{.Executable}}` — a Reddit CLI tool. Use it to search Red
 **IMPORTANT: Do NOT use web search. Only use the provided CLI tool.**
 
 Commands:
-- `{{.Executable}} search "query" -r subreddit --json -l 25` — search within a subreddit, returns JSON array of posts
-- `{{.Executable}} ls subreddit -s top --json -l 25` — list top posts from a subreddit, returns JSON array of posts
-- `{{.Executable}} ls subreddit -s hot --json -l 25` — list hot posts from a subreddit
+- `{{.Executable}} search -r subreddit --json -l 25 "query"` — search within a subreddit, returns JSON array of posts
+- `{{.Executable}} ls -s top --json -l 25 subreddit` — list top posts from a subreddit, returns JSON array of posts
+- `{{.Executable}} ls -s hot --json -l 25 subreddit` — list hot posts from a subreddit
 
 The JSON output contains posts with fields: id, title, score, num_comments, permalink, selftext, subreddit.
 

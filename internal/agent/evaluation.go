@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	rack "go-rack"
+	"belaykit"
 
 	"hiveminer/pkg/types"
 )
@@ -18,12 +18,12 @@ type ClaudeEvaluator struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
-	logger  rack.EventHandler
+	logger  belaykit.EventHandler
 	backend string
 }
 
 // NewClaudeEvaluator creates a new Claude-based thread evaluator
-func NewClaudeEvaluator(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeEvaluator {
+func NewClaudeEvaluator(runner Runner, prompts fs.FS, model string, logger belaykit.EventHandler, backend string) *ClaudeEvaluator {
 	return &ClaudeEvaluator{runner: runner, prompts: prompts, model: model, logger: logger, backend: backend}
 }
 
@@ -51,22 +51,22 @@ func (e *ClaudeEvaluator) EvaluateThread(ctx context.Context, form *types.Form, 
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	opts := []rack.RunOption{
-		rack.WithModel(e.model),
+	opts := []belaykit.RunOption{
+		belaykit.WithModel(e.model),
 	}
 	if e.backend != "codex" {
 		opts = append(opts,
-			rack.WithAllowedTools(
+			belaykit.WithAllowedTools(
 				fmt.Sprintf("Bash(%s *)", executable),
 				fmt.Sprintf("Bash(* > %s)", threadPath),
 				fmt.Sprintf("Write(%s/*)", sessionDir),
 			),
-			rack.WithDisallowedTools("WebSearch", "WebFetch"),
-			rack.WithMaxTurns(10),
+			belaykit.WithDisallowedTools("WebSearch", "WebFetch"),
+			belaykit.WithMaxTurns(10),
 		)
 	}
 	if e.logger != nil {
-		opts = append(opts, rack.WithEventHandler(e.logger))
+		opts = append(opts, belaykit.WithEventHandler(e.logger))
 	}
 	var lastErr error
 	const maxAttempts = 2
@@ -94,19 +94,10 @@ func (e *ClaudeEvaluator) EvaluateThread(ctx context.Context, form *types.Form, 
 		}
 
 		if result.Verdict == "keep" {
-			if !result.ThreadSaved {
-				lastErr = fmt.Errorf("keep verdict without saved thread payload (attempt %d/%d)", attempt, maxAttempts)
-				if attempt < maxAttempts {
-					continue
-				}
-				return nil, lastErr
-			}
 			if validateErr := validateThreadFile(threadPath, thread.PostID); validateErr != nil {
-				lastErr = fmt.Errorf("invalid saved thread payload (attempt %d/%d): %w", attempt, maxAttempts, validateErr)
-				if attempt < maxAttempts {
-					continue
-				}
-				return nil, lastErr
+				// Don't fail evaluation when payload persistence is flaky; the orchestrator
+				// can refetch canonical JSON during extraction.
+				result.ThreadSaved = false
 			}
 		}
 
@@ -120,7 +111,7 @@ func (e *ClaudeEvaluator) EvaluateThread(ctx context.Context, form *types.Form, 
 }
 
 func (e *ClaudeEvaluator) renderPrompt(form *types.Form, thread types.ThreadState, executable string, evalPath string, threadPath string) (string, error) {
-	pt, err := rack.LoadPromptTemplate(e.prompts, "evaluate_thread.md", nil)
+	pt, err := belaykit.LoadPromptTemplate(e.prompts, "evaluate_thread.md", nil)
 	if err != nil {
 		return "", fmt.Errorf("loading template: %w", err)
 	}
