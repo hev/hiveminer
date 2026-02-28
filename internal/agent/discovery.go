@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	rack "go-rack"
+	"belaykit"
 
 	"hiveminer/pkg/types"
 )
@@ -18,12 +18,12 @@ type ClaudeDiscoverer struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
-	logger  rack.EventHandler
+	logger  belaykit.EventHandler
 	backend string
 }
 
 // NewClaudeDiscoverer creates a new Claude-based subreddit discoverer
-func NewClaudeDiscoverer(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeDiscoverer {
+func NewClaudeDiscoverer(runner Runner, prompts fs.FS, model string, logger belaykit.EventHandler, backend string) *ClaudeDiscoverer {
 	return &ClaudeDiscoverer{runner: runner, prompts: prompts, model: model, logger: logger, backend: backend}
 }
 
@@ -48,18 +48,18 @@ func (d *ClaudeDiscoverer) DiscoverSubreddits(ctx context.Context, form *types.F
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	opts := []rack.RunOption{
-		rack.WithModel(d.model),
+	opts := []belaykit.RunOption{
+		belaykit.WithModel(d.model),
 	}
 	if d.backend != "codex" {
 		opts = append(opts,
-			rack.WithAllowedTools(fmt.Sprintf("Bash(%s *)", executable)),
-			rack.WithDisallowedTools("WebSearch", "WebFetch"),
-			rack.WithMaxTurns(15),
+			belaykit.WithAllowedTools(fmt.Sprintf("Bash(%s *)", executable)),
+			belaykit.WithDisallowedTools("WebSearch", "WebFetch"),
+			belaykit.WithMaxTurns(15),
 		)
 	}
 	if d.logger != nil {
-		opts = append(opts, rack.WithEventHandler(d.logger))
+		opts = append(opts, belaykit.WithEventHandler(d.logger))
 	}
 	result, err := d.runner.Run(ctx, prompt, opts...)
 	if err != nil {
@@ -98,9 +98,9 @@ Return ONLY this JSON (no other text):
 
 Do not include the r/ prefix in names. Order from most relevant to least relevant.`, responseText)
 
-	retryOpts := []rack.RunOption{rack.WithModel(d.model)}
+	retryOpts := []belaykit.RunOption{belaykit.WithModel(d.model)}
 	if d.backend != "codex" {
-		retryOpts = append(retryOpts, rack.WithMaxTurns(1))
+		retryOpts = append(retryOpts, belaykit.WithMaxTurns(1))
 	}
 	result, err := d.runner.Run(ctx, prompt, retryOpts...)
 	if err != nil {
@@ -111,7 +111,7 @@ Do not include the r/ prefix in names. Order from most relevant to least relevan
 }
 
 func (d *ClaudeDiscoverer) renderPrompt(form *types.Form, query string, executable string) (string, error) {
-	pt, err := rack.LoadPromptTemplate(d.prompts, "discover_subreddits.md", nil)
+	pt, err := belaykit.LoadPromptTemplate(d.prompts, "discover_subreddits.md", nil)
 	if err != nil {
 		return "", fmt.Errorf("loading template: %w", err)
 	}
@@ -135,7 +135,7 @@ func (d *ClaudeDiscoverer) renderPrompt(form *types.Form, query string, executab
 
 func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {
 	var parsed discoveryResponse
-	if err := rack.ExtractJSON(response, &parsed); err == nil {
+	if err := belaykit.ExtractJSON(response, &parsed); err == nil {
 		names := normalizeSubredditNames(extractNamesFromResponse(parsed))
 		if len(names) > 0 {
 			return names, nil
@@ -145,7 +145,7 @@ func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {
 	var objectStringList struct {
 		Subreddits []string `json:"subreddits"`
 	}
-	if err := rack.ExtractJSON(response, &objectStringList); err == nil {
+	if err := belaykit.ExtractJSON(response, &objectStringList); err == nil {
 		names := normalizeSubredditNames(objectStringList.Subreddits)
 		if len(names) > 0 {
 			return names, nil
@@ -155,7 +155,7 @@ func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {
 	var listObjects []struct {
 		Name string `json:"name"`
 	}
-	if err := rack.ExtractJSONArray(response, &listObjects); err == nil {
+	if err := belaykit.ExtractJSONArray(response, &listObjects); err == nil {
 		raw := make([]string, 0, len(listObjects))
 		for _, v := range listObjects {
 			raw = append(raw, v.Name)
@@ -167,7 +167,7 @@ func (d *ClaudeDiscoverer) parseResponse(response string) ([]string, error) {
 	}
 
 	var listStrings []string
-	if err := rack.ExtractJSONArray(response, &listStrings); err == nil {
+	if err := belaykit.ExtractJSONArray(response, &listStrings); err == nil {
 		names := normalizeSubredditNames(listStrings)
 		if len(names) > 0 {
 			return names, nil

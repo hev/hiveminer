@@ -28,6 +28,12 @@ type DefaultOrchestrator struct {
 	ranker           agent.Ranker
 }
 
+func emitPhase(config RunConfig, phaseName string) {
+	if config.OnPhaseStart != nil {
+		config.OnPhaseStart(phaseName)
+	}
+}
+
 // New creates a new orchestrator with a searcher
 func New(searcher search.Searcher) *DefaultOrchestrator {
 	return &DefaultOrchestrator{
@@ -111,6 +117,7 @@ func (o *DefaultOrchestrator) Run(ctx context.Context, config RunConfig) (string
 			fmt.Printf("Reusing %d previously discovered subreddits\n", len(manifest.Subreddits))
 			config.Subreddits = manifest.Subreddits
 		} else {
+			emitPhase(config, "subreddit-discovery")
 			fmt.Println("\n=== Phase 0: Subreddit Discovery ===")
 			phase0Start := time.Now()
 			if o.discoverer != nil {
@@ -157,6 +164,7 @@ func (o *DefaultOrchestrator) Run(ctx context.Context, config RunConfig) (string
 
 	// Phase 4: Rank all extracted entries
 	if o.ranker != nil {
+		emitPhase(config, "ranking")
 		fmt.Println("\n=== Phase 4: Ranking ===")
 		phase4Start := time.Now()
 		ranked, err := o.rankEntries(ctx, config, manifest, sessionDir)
@@ -464,6 +472,7 @@ func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig,
 		}
 
 		// Phase 1: Discover threads
+		emitPhase(config, "thread-discovery")
 		fmt.Println("\n=== Phase 1: Thread Discovery ===")
 		discoveryStart := time.Now()
 
@@ -538,6 +547,7 @@ func (o *DefaultOrchestrator) runPipeline(ctx context.Context, config RunConfig,
 		}
 
 		fmt.Println("\n=== Phase 2+3: Evaluate & Extract ===")
+		emitPhase(config, "evaluate-extract")
 		fmt.Printf("Feeding %d threads to %d workers\n", len(newItems), workers)
 		evalExtractStart := time.Now()
 		totalFed.Add(int64(len(newItems)))

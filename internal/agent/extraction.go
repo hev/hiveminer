@@ -6,7 +6,7 @@ import (
 	"io"
 	"io/fs"
 
-	rack "go-rack"
+	"belaykit"
 
 	"hiveminer/pkg/types"
 )
@@ -16,12 +16,12 @@ type ClaudeExtractor struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
-	logger  rack.EventHandler
+	logger  belaykit.EventHandler
 	backend string
 }
 
 // NewClaudeExtractor creates a new Claude CLI extractor
-func NewClaudeExtractor(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeExtractor {
+func NewClaudeExtractor(runner Runner, prompts fs.FS, model string, logger belaykit.EventHandler, backend string) *ClaudeExtractor {
 	return &ClaudeExtractor{
 		runner:  runner,
 		prompts: prompts,
@@ -46,17 +46,17 @@ func (c *ClaudeExtractor) ExtractFieldsWithOutput(ctx context.Context, thread *t
 	}
 
 	// Build run options
-	opts := []rack.RunOption{
-		rack.WithModel(c.model),
+	opts := []belaykit.RunOption{
+		belaykit.WithModel(c.model),
 	}
 	if c.backend != "codex" {
-		opts = append(opts, rack.WithMaxOutputTokens(64000))
+		opts = append(opts, belaykit.WithMaxOutputTokens(64000))
 	}
 	if c.logger != nil {
-		opts = append(opts, rack.WithEventHandler(c.logger))
+		opts = append(opts, belaykit.WithEventHandler(c.logger))
 	}
 	if output != nil {
-		opts = append(opts, rack.WithOutputStream(output))
+		opts = append(opts, belaykit.WithOutputStream(output))
 	}
 
 	// Call Claude CLI
@@ -79,7 +79,7 @@ func (c *ClaudeExtractor) ExtractFieldsWithOutput(ctx context.Context, thread *t
 
 // renderPrompt renders the extraction prompt template
 func (c *ClaudeExtractor) renderPrompt(thread *types.Thread, form *types.Form) (string, error) {
-	pt, err := rack.LoadPromptTemplate(c.prompts, "extract.md", nil)
+	pt, err := belaykit.LoadPromptTemplate(c.prompts, "extract.md", nil)
 	if err != nil {
 		return "", fmt.Errorf("loading prompt template: %w", err)
 	}
@@ -128,7 +128,7 @@ func (c *ClaudeExtractor) parseResponse(response string, form *types.Form) (*typ
 		} `json:"entries"`
 	}
 
-	if err := rack.ExtractJSON(response, &parsed); err != nil {
+	if err := belaykit.ExtractJSON(response, &parsed); err != nil {
 		return nil, fmt.Errorf("extracting JSON: %w", err)
 	}
 

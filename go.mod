@@ -2,6 +2,8 @@ module hiveminer
 
 go 1.25.5
 
-require go-rack v0.0.0
+require belaykit v0.0.0
 
-replace go-rack => ../go-rack
+require github.com/google/uuid v1.6.0 // indirect
+
+replace belaykit => ../belaykit

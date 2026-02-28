@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	rack "go-rack"
+	"belaykit"
 
 	"hiveminer/pkg/types"
 )
@@ -20,12 +20,12 @@ type ClaudeThreadDiscoverer struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
-	logger  rack.EventHandler
+	logger  belaykit.EventHandler
 	backend string
 }
 
 // NewClaudeThreadDiscoverer creates a new Claude-based thread discoverer
-func NewClaudeThreadDiscoverer(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeThreadDiscoverer {
+func NewClaudeThreadDiscoverer(runner Runner, prompts fs.FS, model string, logger belaykit.EventHandler, backend string) *ClaudeThreadDiscoverer {
 	return &ClaudeThreadDiscoverer{runner: runner, prompts: prompts, model: model, logger: logger, backend: backend}
 }
 
@@ -61,21 +61,21 @@ func (d *ClaudeThreadDiscoverer) DiscoverThreads(ctx context.Context, form *type
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	opts := []rack.RunOption{
-		rack.WithModel(d.model),
+	opts := []belaykit.RunOption{
+		belaykit.WithModel(d.model),
 	}
 	if d.backend != "codex" {
 		opts = append(opts,
-			rack.WithAllowedTools(
+			belaykit.WithAllowedTools(
 				fmt.Sprintf("Bash(%s *)", executable),
 				fmt.Sprintf("Write(%s/*)", sessionDir),
 			),
-			rack.WithDisallowedTools("WebSearch", "WebFetch"),
-			rack.WithMaxTurns(25),
+			belaykit.WithDisallowedTools("WebSearch", "WebFetch"),
+			belaykit.WithMaxTurns(25),
 		)
 	}
 	if d.logger != nil {
-		opts = append(opts, rack.WithEventHandler(d.logger))
+		opts = append(opts, belaykit.WithEventHandler(d.logger))
 	}
 	_, err = d.runner.Run(ctx, prompt, opts...)
 	if err != nil {
@@ -93,7 +93,7 @@ func (d *ClaudeThreadDiscoverer) renderPrompt(form *types.Form, query string, su
 		},
 	}
 
-	pt, err := rack.LoadPromptTemplate(d.prompts, "discover_threads.md", funcMap)
+	pt, err := belaykit.LoadPromptTemplate(d.prompts, "discover_threads.md", funcMap)
 	if err != nil {
 		return "", fmt.Errorf("loading template: %w", err)
 	}

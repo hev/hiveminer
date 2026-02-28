@@ -9,15 +9,28 @@ import (
 	"strings"
 	"syscall"
 
-	rack "go-rack"
-	"go-rack/claude"
-	"go-rack/codex"
+	"belaykit"
+	"belaykit/claude"
+	"belaykit/codex"
+	"belaykit/providers/belay"
 
 	"hiveminer/internal/agent"
 	"hiveminer/internal/orchestrator"
 	"hiveminer/internal/schema"
 	"hiveminer/internal/search"
 )
+
+type tracedRunner struct {
+	base    agent.Runner
+	traceID string
+}
+
+func (r tracedRunner) Run(ctx context.Context, prompt string, opts ...belaykit.RunOption) (belaykit.Result, error) {
+	if r.traceID != "" {
+		opts = append(opts, belaykit.WithTraceID(r.traceID))
+	}
+	return r.base.Run(ctx, prompt, opts...)
+}
 
 func cmdRun(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
@@ -107,27 +120,41 @@ func cmdRun(args []string) error {
 
 	// Create shared client and prompt filesystem
 	var client agent.Runner
+	var bp *belay.Provider
+	var traceID string
+	var belayHandler belaykit.EventHandler
 	backend := "claude"
 	if *useCodex {
 		client = codex.NewClient()
 		backend = "codex"
 	} else {
-		client = claude.NewClient()
+		bp = belay.NewProvider(belay.WithPricing(claude.PricingForModel(*discoveryModel)), belay.WithContextWindow(200_000))
+		client = claude.NewClient(claude.WithObservability(bp))
+		traceID = bp.StartTrace(belaykit.TraceConfig{Name: form.Title}, nil)
+		belayHandler = bp.EventHandler()
+		client = tracedRunner{base: client, traceID: traceID}
 	}
-	agentLogger := func(name, model string) rack.EventHandler {
-		logOpts := []rack.LoggerOption{
-			rack.LogTokens(true),
-			rack.LogContent(*verbose),
-			rack.WithAgentName(name),
-			rack.WithModelName(model),
+	agentLogger := func(name, model string) belaykit.EventHandler {
+		logOpts := []belaykit.LoggerOption{
+			belaykit.LogTokens(true),
+			belaykit.LogContent(*verbose),
+			belaykit.WithAgentName(name),
+			belaykit.WithModelName(model),
 		}
 		if backend != "codex" {
 			logOpts = append(logOpts,
-				rack.WithPricing(claude.PricingForModel(model)),
-				rack.WithContextWindow(claude.ContextWindowForModel(model)),
+				belaykit.WithPricing(claude.PricingForModel(model)),
+				belaykit.WithContextWindow(claude.ContextWindowForModel(model)),
 			)
 		}
-		return rack.NewLogger(os.Stderr, logOpts...)
+		logger := belaykit.NewLogger(os.Stderr, logOpts...)
+		if bp == nil {
+			return logger
+		}
+		return func(e belaykit.Event) {
+			logger(e)
+			belayHandler(e)
+		}
 	}
 	prompts := os.DirFS("prompts")
 
@@ -154,9 +181,18 @@ func cmdRun(args []string) error {
 		EvalModel:      *evalModel,
 		ExtractModel:   *extractModel,
 		RankModel:      *rankModel,
+		OnPhaseStart: func(phaseName string) {
+			if belayHandler != nil {
+				belayHandler(belaykit.Event{Type: belaykit.EventPhase, PhaseName: phaseName})
+			}
+		},
 	}
 
 	sessionDir, err := orch.Run(ctx, config)
+
+	if bp != nil {
+		bp.EndTrace(traceID, nil)
+	}
 	if err != nil {
 		if ctx.Err() == context.Canceled {
 			fmt.Println("Session saved. Run again to resume.")

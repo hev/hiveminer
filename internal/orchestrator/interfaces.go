@@ -20,6 +20,7 @@ type RunConfig struct {
 	EvalModel      string // model for phase 2 (default "opus")
 	ExtractModel   string // model for phase 3 (default "haiku")
 	RankModel      string // model for phase 4 (default "haiku")
+	OnPhaseStart   func(phaseName string)
 }
 
 // Orchestrator defines the interface for running extraction pipelines

@@ -11,7 +11,7 @@ import (
 	"text/template"
 	"unicode"
 
-	rack "go-rack"
+	"belaykit"
 
 	"hiveminer/pkg/types"
 )
@@ -21,12 +21,12 @@ type ClaudeRanker struct {
 	runner  Runner
 	prompts fs.FS
 	model   string
-	logger  rack.EventHandler
+	logger  belaykit.EventHandler
 	backend string
 }
 
 // NewClaudeRanker creates a new ranker
-func NewClaudeRanker(runner Runner, prompts fs.FS, model string, logger rack.EventHandler, backend string) *ClaudeRanker {
+func NewClaudeRanker(runner Runner, prompts fs.FS, model string, logger belaykit.EventHandler, backend string) *ClaudeRanker {
 	return &ClaudeRanker{
 		runner:  runner,
 		prompts: prompts,
@@ -443,9 +443,9 @@ func (r *ClaudeRanker) AssessWithClaude(ctx context.Context, form *types.Form, i
 	}
 
 	// Call Claude
-	opts := []rack.RunOption{rack.WithModel(r.model)}
+	opts := []belaykit.RunOption{belaykit.WithModel(r.model)}
 	if r.logger != nil {
-		opts = append(opts, rack.WithEventHandler(r.logger))
+		opts = append(opts, belaykit.WithEventHandler(r.logger))
 	}
 	result, err := r.runner.Run(ctx, prompt, opts...)
 	if err != nil {
@@ -497,7 +497,7 @@ func (r *ClaudeRanker) renderPrompt(data rankPromptData) (string, error) {
 		},
 	}
 
-	pt, err := rack.LoadPromptTemplate(r.prompts, "rank.md", funcMap)
+	pt, err := belaykit.LoadPromptTemplate(r.prompts, "rank.md", funcMap)
 	if err != nil {
 		return "", fmt.Errorf("loading rank template: %w", err)
 	}
@@ -507,10 +507,10 @@ func (r *ClaudeRanker) renderPrompt(data rankPromptData) (string, error) {
 
 func parseAssessments(response string) ([]claudeAssessment, error) {
 	var assessments []claudeAssessment
-	err := rack.ExtractJSONArray(response, &assessments)
+	err := belaykit.ExtractJSONArray(response, &assessments)
 	if err != nil {
 		// No flagged entries — that's valid (everything is clean)
-		if err == rack.ErrNoJSON {
+		if err == belaykit.ErrNoJSON {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("parsing assessments: %w", err)
