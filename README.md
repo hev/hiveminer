@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/hiveminer-logo.png" alt="hiveminer logo" width="200">
+  <img src="docs/hiveminer-logo.png" alt="hiveminer logo">
 </p>
 
 # hiveminer
