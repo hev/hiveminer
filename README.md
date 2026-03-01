@@ -1,8 +1,14 @@
+<p align="center">
+  <img src="docs/hiveminer-logo.png" alt="hiveminer logo" width="200">
+</p>
+
 # hiveminer
 
 Extract structured data from Reddit using cascading retrieval — a multi-phase pipeline where AI agent swarms discover, evaluate, extract, and rank information from community discussions.
 
 Define what you're looking for with a form, point it at Reddit, and get back ranked, deduplicated results with confidence scores and source links.
+
+Hiveminer grew out of experiments with agentic workflows — wrapping CLI harnesses in [Ralph](https://github.com/hev/ralph) loops, adopting [CLI-first](https://github.com/hev/vibecheck) development patterns, and eventually building [belaykit](https://github.com/hev/belaykit), a Go SDK for CLI-based agents that powers hiveminer's pipeline and agent swarms.
 
 ### Prerequisites
 
@@ -29,7 +35,7 @@ Results are printed inline and saved to `./output/`.
 
 ### Creating a Form
 
-A form defines what to extract. It's a JSON file with a title, description, search hints, and fields:
+Forms can be created interactively in Claude Code using the `/create-form` skill, which walks you through defining fields step by step. Or write one by hand — a form is a JSON file with a title, description, search hints, and fields:
 
 ```json
 {
@@ -101,7 +107,7 @@ This scoped approach means each agent operates with high signal-to-noise in its 
 
 ### Agent Swarms
 
-Phases 2 and 3 run as parallel agent swarms — a configurable pool of workers (default 10, max 50) that process threads concurrently. Discovery streams threads into a buffered work channel, and workers pick them up as they become available across multiple discovery rounds. Evaluation and extraction happen while discovery is still finding new threads, minimizing total pipeline time.
+Phases 2 and 3 run as parallel agent swarms — a configurable pool of workers (default 10, max 50) that process threads concurrently. Discovery streams threads into a buffered work channel, and workers pick them up as they become available across multiple discovery rounds. Evaluation and extraction happen while discovery is still finding new threads, minimizing total pipeline time. The swarm infrastructure is built on [belaykit](https://github.com/hev/belaykit).
 
 ## How It Works
 

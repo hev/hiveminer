@@ -1,0 +1,4 @@
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/hev/belaykit v0.0.0-20260223132949-51aa57390b62 h1:sAuH97/8EEMvmNWGNgab04Lsg5tg0Omn6AytceWAOxs=
+github.com/hev/belaykit v0.0.0-20260223132949-51aa57390b62/go.mod h1:Wc7ZCOTsZhmR3iFjjgL2R0v5qHDiHVSjARxi4tRRtBo=
